@@ -1,0 +1,147 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Directory Tree Structure</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            margin: 20px;
+            color: #333;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        .stats {
+            background-color: #ecf0f1;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        .tree {
+            font-family: 'Consolas', monospace;
+            margin-left: 20px;
+        }
+        .tree ul {
+            list-style: none;
+            padding-left: 20px;
+        }
+        .folder {
+            color: #2980b9;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .file {
+            color: #2c3e50;
+        }
+        .folder::before {
+            content: "📁";
+            margin-right: 5px;
+        }
+        .file::before {
+            content: "📄";
+            margin-right: 5px;
+        }
+        .size {
+            color: #7f8c8d;
+            font-size: 0.9em;
+            margin-left: 10px;
+        }
+        .timestamp {
+            color: #95a5a6;
+            font-size: 0.8em;
+            margin-left: 10px;
+        }
+    </style>
+    <script>
+        function toggleFolder(element) {
+            const ul = element.nextElementSibling;
+            if (ul) {
+                ul.style.display = ul.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Directory Tree Structure</h1>
+            <p>Generated on: 02/16/2025 00:45:30</p>
+            <p>Path: H:\Partition 01 - NTFS - 97.65 GB\Root\Git\MyRepository\project</p>
+        </div>
+        
+        <div class="stats">
+            <h2>Statistics</h2>
+            <p>Total Files: 30</p>
+            <p>Total Folders: 5</p>
+            <p>Total Size: 0.25 MB</p>
+            <p>Duration: 0.0019999 seconds</p>
+        </div>
+        
+        <div class="tree"><ul>
+<li><span class='folder' onclick='toggleFolder(this)'>.bolt</span><span class='timestamp'>2025-02-14 18:58</span>
+<ul>
+    <li><span class='file'>config.json</span><span class='size'>(0.04 KB)</span><span class='timestamp'>2025-02-15 20:33</span></li>
+    <li><span class='file'>prompt</span><span class='size'>(0.53 KB)</span><span class='timestamp'>2025-02-15 20:33</span></li>
+    </ul>
+</li>
+<li><span class='folder' onclick='toggleFolder(this)'>src</span><span class='timestamp'>2025-02-15 01:51</span>
+<ul>
+    <li><span class='folder' onclick='toggleFolder(this)'>components</span><span class='timestamp'>2025-02-16 00:04</span>
+<ul>
+        <li><span class='file'>GraphView.tsx</span><span class='size'>(1.68 KB)</span><span class='timestamp'>2025-02-15 20:33</span></li>
+        <li><span class='file'>PathInput.tsx</span><span class='size'>(5.16 KB)</span><span class='timestamp'>2025-02-15 20:33</span></li>
+        <li><span class='file'>ProgressBar.tsx</span><span class='size'>(1.48 KB)</span><span class='timestamp'>2025-02-15 20:33</span></li>
+        <li><span class='file'>SettingsModal.tsx</span><span class='size'>(6.48 KB)</span><span class='timestamp'>2025-02-15 20:33</span></li>
+        <li><span class='file'>TextView.tsx</span><span class='size'>(1.75 KB)</span><span class='timestamp'>2025-02-15 20:33</span></li>
+        <li><span class='file'>TreeView.tsx</span><span class='size'>(1.28 KB)</span><span class='timestamp'>2025-02-15 20:33</span></li>
+        </ul>
+    </li>
+    <li><span class='folder' onclick='toggleFolder(this)'>types</span><span class='timestamp'>2025-02-14 18:58</span>
+<ul>
+        <li><span class='file'>FileSystem.ts</span><span class='size'>(1 KB)</span><span class='timestamp'>2025-02-15 20:33</span></li>
+        </ul>
+    </li>
+    <li><span class='folder' onclick='toggleFolder(this)'>utils</span><span class='timestamp'>2025-02-15 01:51</span>
+<ul>
+        <li><span class='file'>fileSystem.ts</span><span class='size'>(2.09 KB)</span><span class='timestamp'>2025-02-15 20:33</span></li>
+        </ul>
+    </li>
+    <li><span class='file'>App.tsx</span><span class='size'>(10.29 KB)</span><span class='timestamp'>2025-02-15 20:33</span></li>
+    <li><span class='file'>index.css</span><span class='size'>(0.06 KB)</span><span class='timestamp'>2025-02-15 20:33</span></li>
+    <li><span class='file'>main.tsx</span><span class='size'>(0.23 KB)</span><span class='timestamp'>2025-02-15 20:33</span></li>
+    <li><span class='file'>vite-env.d.ts</span><span class='size'>(0.04 KB)</span><span class='timestamp'>2025-02-15 20:33</span></li>
+    </ul>
+</li>
+<li><span class='file'>.gitignore</span><span class='size'>(0.25 KB)</span><span class='timestamp'>2025-02-15 20:33</span></li>
+<li><span class='file'>eslint.config.js</span><span class='size'>(0.72 KB)</span><span class='timestamp'>2025-02-15 20:33</span></li>
+<li><span class='file'>index.html</span><span class='size'>(0.36 KB)</span><span class='timestamp'>2025-02-15 20:33</span></li>
+<li><span class='file'>main.ps1</span><span class='size'>(3.16 KB)</span><span class='timestamp'>2025-02-16 00:10</span></li>
+<li><span class='file'>main2.ps1</span><span class='size'>(19.25 KB)</span><span class='timestamp'>2025-02-16 00:44</span></li>
+<li><span class='file'>package-lock.json</span><span class='size'>(193.83 KB)</span><span class='timestamp'>2025-02-15 20:33</span></li>
+<li><span class='file'>package.json</span><span class='size'>(0.89 KB)</span><span class='timestamp'>2025-02-15 20:33</span></li>
+<li><span class='file'>postcss.config.js</span><span class='size'>(0.08 KB)</span><span class='timestamp'>2025-02-15 20:33</span></li>
+<li><span class='file'>README.md</span><span class='size'>(2.02 KB)</span><span class='timestamp'>2025-02-15 20:33</span></li>
+<li><span class='file'>tailwind.config.js</span><span class='size'>(0.17 KB)</span><span class='timestamp'>2025-02-15 20:33</span></li>
+<li><span class='file'>tree.html</span><span class='size'>(0 KB)</span><span class='timestamp'>2025-02-16 00:30</span></li>
+<li><span class='file'>tree.txt</span><span class='size'>(0.94 KB)</span><span class='timestamp'>2025-02-16 00:30</span></li>
+<li><span class='file'>tsconfig.app.json</span><span class='size'>(0.54 KB)</span><span class='timestamp'>2025-02-15 20:33</span></li>
+<li><span class='file'>tsconfig.json</span><span class='size'>(0.12 KB)</span><span class='timestamp'>2025-02-15 20:33</span></li>
+<li><span class='file'>tsconfig.node.json</span><span class='size'>(0.47 KB)</span><span class='timestamp'>2025-02-15 20:33</span></li>
+<li><span class='file'>vite.config.ts</span><span class='size'>(0.21 KB)</span><span class='timestamp'>2025-02-15 20:33</span></li>
+</ul>
+        </div>
+    </div>
+</body>
+</html>

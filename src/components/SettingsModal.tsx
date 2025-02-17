@@ -1,5 +1,5 @@
-import React from 'react';
-import { X } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Plus, Trash2 } from 'lucide-react';
 import { VisualizationOptions, DEFAULT_FILE_FORMATS } from '../types/FileSystem';
 
 interface SettingsModalProps {
@@ -15,6 +15,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   options,
   onOptionsChange,
 }) => {
+  const [newExtension, setNewExtension] = useState('');
+
   if (!isOpen) return null;
 
   const handleFormatToggle = (format: string) => {
@@ -38,6 +40,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     onOptionsChange({
       ...options,
       showHidden: !options.showHidden,
+    });
+  };
+
+  const handleAddCustomExtension = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newExtension && !options.customExtensions.includes(newExtension)) {
+      const extension = newExtension.startsWith('.') ? newExtension : `.${newExtension}`;
+      onOptionsChange({
+        ...options,
+        customExtensions: [...options.customExtensions, extension],
+      });
+      setNewExtension('');
+    }
+  };
+
+  const handleRemoveCustomExtension = (extension: string) => {
+    onOptionsChange({
+      ...options,
+      customExtensions: options.customExtensions.filter(ext => ext !== extension),
     });
   };
 
@@ -87,6 +108,42 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   Show Hidden Files
                 </span>
               </label>
+            </div>
+
+            {/* Custom Extensions */}
+            <div>
+              <h3 className="text-sm font-medium text-gray-900 mb-3">Custom Extensions</h3>
+              <form onSubmit={handleAddCustomExtension} className="flex gap-2 mb-3">
+                <input
+                  type="text"
+                  value={newExtension}
+                  onChange={(e) => setNewExtension(e.target.value)}
+                  placeholder=".custom"
+                  className="flex-1 px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </form>
+              <div className="flex flex-wrap gap-2">
+                {options.customExtensions.map((ext) => (
+                  <div
+                    key={ext}
+                    className="flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-full"
+                  >
+                    <span className="text-sm">{ext}</span>
+                    <button
+                      onClick={() => handleRemoveCustomExtension(ext)}
+                      className="text-gray-500 hover:text-red-500"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* File Format Sections */}
