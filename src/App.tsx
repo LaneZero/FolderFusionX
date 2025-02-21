@@ -7,7 +7,7 @@ import { PathInput } from './components/PathInput';
 import { SettingsModal } from './components/SettingsModal';
 import { ProgressBar } from './components/ProgressBar';
 import { FileNode, VisualizationOptions, DirectoryInput, DEFAULT_FILE_FORMATS, ProcessingStatus } from './types/FileSystem';
-import { FolderTree, GitBranch, Settings, Download, FileText, Github, Coffee, RotateCcw, BookOpen } from 'lucide-react';
+import { FolderTree, GitBranch, Settings, Download, FileText, Github, Coffee, RotateCcw, BookOpen, LinkIcon } from 'lucide-react';
 import { fetchGitHubContents, parseLocalPath, saveOutput } from './utils/fileSystem';
 
 const STORAGE_KEY = 'FolderFusionX-settings'; // ctz
@@ -289,6 +289,17 @@ function App() {
                 >
                   <Github className="w-4 h-4" />
                   <span className="text-sm">View on GitHub</span>                </a>
+
+
+                  <a
+                  href="https://github.com/LaneZero/DirTreePhoria"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-gray-600 hover:text-amber-500 transition-colors"
+                >
+                  <LinkIcon className="w-4 h-4" />
+                  <span className="text-sm">DirTreePhoria</span>
+                </a>
 
               </div>
             </div>
