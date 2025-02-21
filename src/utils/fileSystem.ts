@@ -1,14 +1,30 @@
-/**
- * File system utility functions for handling local and GitHub paths
- * This module provides functionality for:
- * - Parsing and fetching GitHub repository contents
- * - Handling local directory access via File System Access API
- * - Saving visualization outputs in different formats
- */
-
 import { Octokit } from 'octokit';
-import { FileNode } from '../types/FileSystem';
+import { FileNode, VisualizationOptions, DEFAULT_EXCLUDED_FOLDERS } from '../types/FileSystem';
 import html2canvas from 'html2canvas';
+
+// Default options for file processing
+const DEFAULT_OPTIONS: VisualizationOptions = {
+  maxDepth: 5,
+  showHidden: false,
+  fileTypes: [],
+  excludePatterns: [],
+  customExtensions: [],
+  comprehensionMode: false,
+  enabledFormats: {},
+  showProgressBar: false
+};
+
+/**
+ * Checks if a path should be excluded based on the exclude patterns
+ * @param path - Path to check
+ * @param excludePatterns - List of patterns to exclude
+ * @returns boolean indicating if the path should be excluded
+ */
+function shouldExcludePath(path: string, excludePatterns: string[]): boolean {
+  return excludePatterns.some(pattern => 
+    path.split('/').some(part => part === pattern)
+  );
+}
 
 /**
  * Parses a GitHub URL to extract owner, repo, and path information
@@ -110,13 +126,23 @@ export async function fetchGitHubContents(url: string): Promise<FileNode> {
  * Recursively processes a directory handle to build the file tree
  * @param dirHandle - Directory handle from File System Access API
  * @param path - Current path in the tree
+ * @param options - Visualization options including exclude patterns
  * @returns Promise<FileNode> representing the directory structure
  */
-async function processDirectory(dirHandle: FileSystemDirectoryHandle, path: string): Promise<FileNode> {
+async function processDirectory(
+  dirHandle: FileSystemDirectoryHandle, 
+  path: string,
+  options: VisualizationOptions = DEFAULT_OPTIONS
+): Promise<FileNode> {
   const children: FileNode[] = [];
   
   for await (const entry of dirHandle.values()) {
     const entryPath = `${path}/${entry.name}`;
+    
+    // Skip excluded paths
+    if (shouldExcludePath(entryPath, [...DEFAULT_EXCLUDED_FOLDERS, ...options.excludePatterns])) {
+      continue;
+    }
     
     if (entry.kind === 'file') {
       const file = await entry.getFile();
@@ -141,7 +167,7 @@ async function processDirectory(dirHandle: FileSystemDirectoryHandle, path: stri
       });
     } else if (entry.kind === 'directory') {
       try {
-        const subDir = await processDirectory(entry, entryPath);
+        const subDir = await processDirectory(entry, entryPath, options);
         children.push(subDir);
       } catch (error) {
         console.warn(`Could not process directory ${entryPath}`);

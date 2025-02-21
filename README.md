@@ -50,7 +50,7 @@ A powerful and intuitive tool for visualizing directory structures with multiple
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/directory-visualizer
+git clone https://github.com/LaneZero/FolderFusionX.git
 
 # Install dependencies
 npm install

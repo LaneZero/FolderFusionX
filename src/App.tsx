@@ -10,20 +10,21 @@ import { FileNode, VisualizationOptions, DirectoryInput, DEFAULT_FILE_FORMATS, P
 import { FolderTree, GitBranch, Settings, Download, FileText, Github, Coffee, RotateCcw, BookOpen } from 'lucide-react';
 import { fetchGitHubContents, parseLocalPath, saveOutput } from './utils/fileSystem';
 
-const STORAGE_KEY = 'directory-visualizer-settings';
-const GITHUB_REPO = 'https://github.com/yourusername/directory-visualizer';
+const STORAGE_KEY = 'FolderFusionX-settings'; // ctz
+const GITHUB_REPO = 'https://github.com/LaneZero/FolderFusionX'; // ctz
 
 const DEFAULT_OPTIONS: VisualizationOptions = {
   maxDepth: 5,
   showHidden: false,
   fileTypes: [],
-  excludePatterns: [],
+  excludePatterns: [], // Initialize with empty array, defaults will be added in UI
   customExtensions: [],
   comprehensionMode: false,
   enabledFormats: Object.keys(DEFAULT_FILE_FORMATS).reduce((acc, format) => ({
     ...acc,
     [format]: true
-  }), {})
+  }), {}),
+  showProgressBar: false
 };
 
 function App() {
@@ -265,14 +266,14 @@ function App() {
             )}
           </div>
 
-          <div className="border-t px-6 py-4 bg-gray-50">
+			<div className="border-t px-6 py-4 bg-gray-50">
             <div className="flex justify-between items-center">
-              <p className="text-sm text-gray-500">
-                © 2025 Directory Visualizer. All rights reserved.
+              <p className="text-sm text-gray-500"> 
+                © 2025 Folder Fusion X (FFX). All rights reserved. 
               </p>
               <div className="flex items-center gap-4">
                 <a
-                  href="https://www.buymeacoffee.com/yourusername"
+                  href="https://www.coffeete.ir/AhmadR3zA"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 text-gray-600 hover:text-amber-500 transition-colors"
@@ -280,6 +281,14 @@ function App() {
                   <Coffee className="w-4 h-4" />
                   <span className="text-sm">Buy me a coffee</span>
                 </a>
+                <a
+                  href={GITHUB_REPO}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-gray-600 hover:text-blue-500 transition-colors"
+                >
+                  <Github className="w-4 h-4" />
+                  <span className="text-sm">View on GitHub</span>                </a>
                 <a
                   href={GITHUB_REPO}
                   target="_blank"
