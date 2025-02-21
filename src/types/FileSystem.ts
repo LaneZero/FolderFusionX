@@ -22,14 +22,17 @@ export interface VisualizationOptions {
   maxDepth: number;
   showHidden: boolean;
   fileTypes: string[];
-  excludePatterns: string[];
+  excludePatterns: string[];  // List of folder names to exclude
   enabledFormats: {
     [key: string]: boolean;
   };
   customExtensions: string[];
   comprehensionMode: boolean;
-  showProgressBar: boolean; // New option for progress bar visibility
+  showProgressBar: boolean;
 }
+
+// Default folders to exclude from scanning
+export const DEFAULT_EXCLUDED_FOLDERS = ['.git', 'node_modules'];
 
 /**
  * Default file format categories and their extensions
