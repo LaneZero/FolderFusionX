@@ -154,7 +154,7 @@ function App() {
           <div className="border-b px-6 py-4 bg-gradient-to-r from-blue-600 to-blue-700">
             <h1 className="text-2xl font-semibold text-white flex items-center gap-2">
               <FolderTree className="w-6 h-6" />
-              Directory Visualizer
+              FolderFusionX (FFX)
             </h1>
             <p className="text-blue-100 mt-1">
               Visualize and analyze directory structures with ease
@@ -289,15 +289,7 @@ function App() {
                 >
                   <Github className="w-4 h-4" />
                   <span className="text-sm">View on GitHub</span>                </a>
-                <a
-                  href={GITHUB_REPO}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-gray-600 hover:text-blue-500 transition-colors"
-                >
-                  <Github className="w-4 h-4" />
-                  <span className="text-sm">View on GitHub</span>
-                </a>
+
               </div>
             </div>
           </div>
