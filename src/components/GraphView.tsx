@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import * as d3 from 'd3';
 import { FileNode } from '../types/FileSystem';
+import { saveOutput } from '../utils/fileSystem';
 
 interface GraphViewProps {
   data: FileNode;
@@ -8,6 +9,7 @@ interface GraphViewProps {
 
 export const GraphView: React.FC<GraphViewProps> = ({ data }) => {
   const svgRef = useRef<SVGSVGElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!svgRef.current) return;
@@ -58,8 +60,22 @@ export const GraphView: React.FC<GraphViewProps> = ({ data }) => {
       .attr('class', 'text-sm fill-current text-gray-700');
   }, [data]);
 
+  const handleSave = async () => {
+    if (containerRef.current) {
+      await saveOutput(data, 'graph', containerRef.current);
+    }
+  };
+
   return (
-    <div className="overflow-auto border rounded-lg bg-white">
+    <div className="overflow-auto border rounded-lg bg-white" ref={containerRef}>
+      <div className="p-4 border-b">
+        <button
+          onClick={handleSave}
+          className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+        >
+          Save as Image
+        </button>
+      </div>
       <svg ref={svgRef}></svg>
     </div>
   );
