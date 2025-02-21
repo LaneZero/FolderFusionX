@@ -1,4 +1,5 @@
-![main LOGO](https://github-production-user-asset-6210df.s3.amazonaws.com/46918547/415821813-d544090d-1270-4cf8-ba0d-f4de92de8c20.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAVCODYLSA53PQK4ZA/20250221/us-east-1/s3/aws4_request&X-Amz-Date=20250221T210408Z&X-Amz-Expires=300&X-Amz-Signature=1ee5443335e78d91bed0f31d1fd0a2a5f1e556e80c7e2ee203ab4947d0f6e9ef&X-Amz-SignedHeaders=host)
+![MainLogoFFX](https://github-production-user-asset-6210df.s3.amazonaws.com/46918547/415826325-86faa40b-0cd6-458b-a1fe-51f904618309.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAVCODYLSA53PQK4ZA/20250221/us-east-1/s3/aws4_request&X-Amz-Date=20250221T211901Z&X-Amz-Expires=300&X-Amz-Signature=d52679fcbc7da419d0537191b9e68182319668dbf533ec8bb9af043af629a98c&X-Amz-SignedHeaders=host)
+git 
 
 #  Folder Fusion X (FFX)
 
