@@ -5,9 +5,10 @@ import { Github, AlertCircle, FolderOpen } from 'lucide-react';
 interface PathInputProps {
   onSubmit: (input: DirectoryInput) => void;
   isLoading: boolean;
+  darkMode?: boolean;
 }
 
-export const PathInput: React.FC<PathInputProps> = ({ onSubmit, isLoading }) => {
+export const PathInput: React.FC<PathInputProps> = ({ onSubmit, isLoading, darkMode = false }) => {
   const [pathType, setPathType] = useState<PathType>('local');
   const [inputValue, setInputValue] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +49,9 @@ export const PathInput: React.FC<PathInputProps> = ({ onSubmit, isLoading }) => 
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   placeholder="Enter GitHub repository URL"
-                  className="w-full px-4 py-2 pr-24 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                  className={`w-full px-4 py-2 pr-24 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
+                    darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : ''
+                  }`}
                   disabled={isLoading}
                 />
               )}
@@ -56,20 +59,24 @@ export const PathInput: React.FC<PathInputProps> = ({ onSubmit, isLoading }) => 
                 <div className="flex items-center gap-2">
                   <button
                     type="submit"
-                    className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-gray-100 border rounded-md hover:bg-gray-200 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+                    className={`flex items-center gap-2 px-4 py-2 rounded-md hover:bg-gray-200 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors ${
+                      darkMode 
+                        ? 'text-white bg-gray-700 hover:bg-gray-600' 
+                        : 'text-gray-700 bg-gray-100'
+                    }`}
                     disabled={isLoading}
                   >
                     <FolderOpen className="w-5 h-5" />
                     Select Directory
                   </button>
-                  <span className="text-sm text-gray-500">
+                  <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-500'}`}>
                     Click to choose a local directory
                   </span>
                 </div>
               )}
               <div className="absolute right-2 top-1/2 -translate-y-1/2">
                 {pathType === 'github' && (
-                  <Github className="w-5 h-5 text-gray-400" />
+                  <Github className={`w-5 h-5 ${darkMode ? 'text-gray-400' : 'text-gray-400'}`} />
                 )}
               </div>
             </div>
@@ -77,7 +84,9 @@ export const PathInput: React.FC<PathInputProps> = ({ onSubmit, isLoading }) => 
           <select
             value={pathType}
             onChange={handlePathTypeChange}
-            className="px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+            className={`px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+              darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white'
+            }`}
             disabled={isLoading}
           >
             <option value="local">Local Path</option>
@@ -96,13 +105,13 @@ export const PathInput: React.FC<PathInputProps> = ({ onSubmit, isLoading }) => 
           )}
         </div>
         {error && (
-          <div className="flex items-center gap-2 text-red-500 text-sm">
+          <div className={`flex items-center gap-2 text-sm ${darkMode ? 'text-red-400' : 'text-red-500'}`}>
             <AlertCircle className="w-4 h-4" />
             <span>{error}</span>
           </div>
         )}
       </form>
-      <div className="mt-4 text-sm text-gray-600">
+      <div className={`mt-4 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
         <p className="font-medium mb-2">Required Permissions:</p>
         <ul className="list-disc pl-5 space-y-1">
           <li>

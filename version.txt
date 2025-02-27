@@ -1,0 +1,25 @@
+FolderFusionX v1.1.0
+
+Release Date: October 25, 2025
+
+Change Log:
+- Fixed "Excluded Folders" functionality to properly filter out specified directories
+- Added reload button to refresh visualization with updated settings
+- Improved dark mode support for input fields and form elements
+- Fixed Link icon reference in footer section
+- Updated repository URLs and project naming throughout the application
+- Improved error handling for directory access permissions
+- Enhanced UI responsiveness for various screen sizes
+- Fixed local storage key naming for consistent settings persistence
+
+Known Issues:
+- Large repositories (>10,000 files) may cause performance issues
+- Some system directories may be restricted due to browser security policies
+- GitHub API rate limits apply (60 requests/hour without authentication)
+
+Upcoming Features:
+- File content search
+- Comparison between directories
+- Collaborative sharing
+- Custom visualization themes
+- Offline mode support
