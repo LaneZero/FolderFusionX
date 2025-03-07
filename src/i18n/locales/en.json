@@ -1,0 +1,113 @@
+{
+  "app": {
+    "title": "Folder Fusion X",
+    "welcome": "Welcome to Folder Fusion X",
+    "description": "Visualize and explore directory structures with multiple view options. Select a local directory or enter a GitHub repository URL to get started."
+  },
+  "wallet": {
+    "title": "Crypto Wallet",
+    "disclaimer": "Please verify all addresses before sending any cryptocurrency. We are not responsible for funds sent to incorrect addresses.",
+    "copied": "Address copied!",
+    "copy": "Copy address"
+  },
+  "header": {
+    "help": "Help",
+    "darkMode": "Switch to dark mode",
+    "lightMode": "Switch to light mode",
+    "settings": "Settings",
+    "github": "View on GitHub"
+  },
+  "views": {
+    "tree": "Tree View",
+    "graph": "Graph View",
+    "text": "Text View",
+    "comprehension": "Comprehension View",
+    "reload": "Reload"
+  },
+  "features": {
+    "title": "Features:",
+    "items": [
+      "Multiple visualization types",
+      "GitHub repository support",
+      "Local directory browsing",
+      "Customizable settings",
+      "Dark mode support"
+    ]
+  },
+  "quickStart": {
+    "title": "Quick Start:",
+    "steps": [
+      "Choose a source (Local or GitHub)",
+      "Select directory or enter repo URL",
+      "Click \"Visualize\" to process",
+      "Explore using different views",
+      "Customize via Settings"
+    ]
+  },
+  "buttons": {
+    "learnMore": "Learn More",
+    "visualize": "Visualize",
+    "selectDirectory": "Select Directory",
+    "cancel": "Cancel",
+    "close": "Close",
+    "save": "Save",
+    "copy": "Copy",
+    "download": "Download",
+    "search": "Search",
+    "validate": "Validate Token",
+    "saveToken": "Save Token"
+  },
+  "pathInput": {
+    "sourceType": "Source Type",
+    "local": "Local Directory",
+    "github": "GitHub Repository",
+    "repoUrl": "Repository URL",
+    "dirPath": "Directory Path",
+    "enterGithubUrl": "Enter GitHub repository URL",
+    "clickToChoose": "Click to choose a local directory",
+    "processing": "Processing..."
+  },
+  "settings": {
+    "title": "Settings",
+    "general": "General",
+    "githubApi": "GitHub API",
+    "fileFormats": "File Formats",
+    "excludedFolders": "Excluded Folders",
+    "maxDepth": "Maximum Depth",
+    "showHidden": "Show Hidden Files (starting with .)",
+    "darkMode": "Dark Mode",
+    "showProgressBar": "Always Show Progress Bar",
+    "resetDefaults": "Reset to default settings"
+  },
+  "help": {
+    "title": "How to Use Folder Fusion X",
+    "gettingStarted": "Getting Started",
+    "gettingStartedDesc": "Folder Fusion X helps you visualize directory structures in multiple ways:",
+    "viewTypes": "View Types",
+    "treeViewDesc": "Traditional expandable directory tree",
+    "graphViewDesc": "Visual node-based representation of your directory",
+    "textViewDesc": "Plain text representation that can be copied or saved",
+    "comprehensionViewDesc": "Detailed analysis with file previews",
+    "settingsDesc": "Click the settings icon to customize:",
+    "tips": "Tips",
+    "gotIt": "Got it"
+  },
+  "footer": {
+    "copyright": "All rights reserved.",
+    "donate": "Donate",
+    "moreProjects": "More Projects"
+  },
+  "version": {
+    "releaseDate": "Release Date",
+    "whatsNew": "What's New:",
+    "viewChangelog": "View full changelog",
+    "starOnGithub": "Star on GitHub"
+  },
+  "errors": {
+    "invalidGithubUrl": "Please enter a valid GitHub repository URL",
+    "enterGithubUrl": "Please enter a GitHub repository URL",
+    "tokenInvalid": "Invalid token. Please check and try again.",
+    "requestTimeout": "Request timed out. This could be due to a large repository or network issues.",
+    "tryAgain": "Try Again"
+  }
+}

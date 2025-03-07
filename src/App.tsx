@@ -1,69 +1,170 @@
 import React, { useState, useEffect } from 'react';
 import { TreeView } from './components/TreeView';
-import { GraphView } from './components/GraphView';
 import { TextView } from './components/TextView';
+import { GraphView } from './components/GraphView';
 import { ComprehensionView } from './components/ComprehensionView';
 import { PathInput } from './components/PathInput';
-import { SettingsModal } from './components/SettingsModal';
 import { ProgressBar } from './components/ProgressBar';
+import { SettingsModal } from './components/SettingsModal';
 import { VersionInfo } from './components/VersionInfo';
-import { FileNode, VisualizationOptions, DirectoryInput, DEFAULT_FILE_FORMATS, ProcessingStatus } from './types/FileSystem';
-import { FolderTree, GitBranch, Settings, Download, FileText, Github, Coffee, RotateCcw, BookOpen, Sun, Moon, Link, RefreshCw } from 'lucide-react';
-import { fetchGitHubContents, parseLocalPath, saveOutput, validateGitHubToken } from './utils/fileSystem';
+import { LanguageSwitcher } from './components/LanguageSwitcher';
+import { CryptoWallet } from './components/CryptoWallet';
+import { FileNode, VisualizationOptions, ProcessingStatus, DirectoryInput, DEFAULT_FILE_FORMATS, INITIAL_DEFAULT_FOLDERS } from './types/FileSystem';
+import { parseLocalPath, fetchGitHubContents } from './utils/fileSystem';
+import { getGitHubToken, storeGitHubToken } from './utils/tokenStorage';
 import { logger } from './utils/logger';
+import { Settings, Moon, Sun, FolderTree, BarChart2, FileText, BookOpen, RefreshCw, Github, FileCode, HelpCircle, X, Zap, Eye, Code, Layers } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
-const STORAGE_KEY = 'FolderFusionX-settings'; // ctz
-const GITHUB_REPO = 'https://github.com/LaneZero/FolderFusionX'; // ctz
-
+// Default visualization options
 const DEFAULT_OPTIONS: VisualizationOptions = {
   maxDepth: 5,
   showHidden: false,
   fileTypes: [],
-  excludePatterns: [],
+  excludePatterns: [...INITIAL_DEFAULT_FOLDERS],
   customExtensions: [],
   comprehensionMode: false,
-  enabledFormats: Object.keys(DEFAULT_FILE_FORMATS).reduce((acc, format) => ({
-    ...acc,
-    [format]: true
-  }), {}),
-  showProgressBar: false,
-  darkMode: false
+  enabledFormats: Object.keys(DEFAULT_FILE_FORMATS).reduce((acc, key) => {
+    acc[key] = true;
+    return acc;
+  }, {} as Record<string, boolean>),
+  showProgressBar: true,
+  darkMode: window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
 };
 
+// View types
+type ViewType = 'tree' | 'graph' | 'text' | 'comprehension';
+
 function App() {
-  const [viewMode, setViewMode] = useState<'tree' | 'graph' | 'text' | 'comprehension'>('tree');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { t, i18n } = useTranslation();
+  
+  // State for file system data and UI
   const [data, setData] = useState<FileNode | null>(null);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [viewType, setViewType] = useState<ViewType>('tree');
+  const [isLoading, setIsLoading] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [options, setOptions] = useState<VisualizationOptions>(() => {
+    // Load options from localStorage if available
+    const savedOptions = localStorage.getItem('visualization-options');
+    if (savedOptions) {
+      try {
+        const parsedOptions = JSON.parse(savedOptions);
+        // Check for GitHub token in session storage
+        const token = getGitHubToken();
+        if (token) {
+          parsedOptions.githubToken = token;
+        }
+        return parsedOptions;
+      } catch (error) {
+        logger.error('Failed to parse saved options', { error });
+        return DEFAULT_OPTIONS;
+      }
+    }
+    return DEFAULT_OPTIONS;
+  });
+
+  // Processing status state
   const [processingStatus, setProcessingStatus] = useState<ProcessingStatus>({
     total: 0,
     processed: 0,
     status: 'idle'
   });
-  const [lastInput, setLastInput] = useState<DirectoryInput | null>(null);
-  
-  const [options, setOptions] = useState<VisualizationOptions>(() => {
-    try {
-      const savedSettings = localStorage.getItem(STORAGE_KEY);
-      return savedSettings ? JSON.parse(savedSettings) : DEFAULT_OPTIONS;
-    } catch (error) {
-      logger.error('Failed to load settings', { error });
-      return DEFAULT_OPTIONS;
-    }
-  });
 
+  // Save options to localStorage when they change
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(options));
-    // Apply dark mode to document
-    document.documentElement.classList.toggle('dark', options.darkMode);
+    try {
+      // Don't save the token to localStorage for security
+      const optionsToSave = { ...options };
+      delete optionsToSave.githubToken;
+      
+      localStorage.setItem('visualization-options', JSON.stringify(optionsToSave));
+      
+      // Store token separately in session storage
+      if (options.githubToken) {
+        storeGitHubToken(options.githubToken);
+      }
+    } catch (error) {
+      logger.error('Failed to save options', { error });
+    }
   }, [options]);
 
-  const resetSettings = () => {
-    setOptions(DEFAULT_OPTIONS);
-    localStorage.removeItem(STORAGE_KEY);
+  // Handle directory input submission
+  const handleDirectorySubmit = async (input: DirectoryInput) => {
+    setIsLoading(true);
+    setProcessingStatus({
+      total: 0,
+      processed: 0,
+      status: 'processing',
+      abortController: new AbortController()
+    });
+
+    try {
+      let result: FileNode;
+
+      if (input.type === 'local') {
+        result = await parseLocalPath(input.value, options);
+      } else {
+        // GitHub repository
+        result = await fetchGitHubContents(
+          input.value, 
+          options,
+          processingStatus.abortController?.signal
+        );
+      }
+
+      setData(result);
+      setProcessingStatus({
+        total: processingStatus.total,
+        processed: processingStatus.total,
+        status: 'complete'
+      });
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        setProcessingStatus({
+          ...processingStatus,
+          status: 'idle'
+        });
+      } else if (error.message?.includes('timed out')) {
+        setProcessingStatus({
+          ...processingStatus,
+          status: 'timeout'
+        });
+        logger.error('Request timed out', { error });
+      } else {
+        setProcessingStatus({
+          ...processingStatus,
+          status: 'error',
+          error: error.message
+        });
+        logger.error('Error processing directory', { error });
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
+  // Handle cancellation of processing
+  const handleCancelProcessing = () => {
+    if (processingStatus.abortController) {
+      processingStatus.abortController.abort();
+      setProcessingStatus({
+        ...processingStatus,
+        status: 'idle'
+      });
+      setIsLoading(false);
+    }
+  };
+
+  // Update processing status
+  const updateProcessingStatus = (status: Partial<ProcessingStatus>) => {
+    setProcessingStatus(prev => ({
+      ...prev,
+      ...status
+    }));
+  };
+
+  // Toggle dark mode
   const toggleDarkMode = () => {
     setOptions(prev => ({
       ...prev,
@@ -71,466 +172,476 @@ function App() {
     }));
   };
 
-  const handlePathSubmit = async (input: DirectoryInput) => {
-    setIsLoading(true);
-    setError(null);
-    setProcessingStatus({ total: 0, processed: 0, status: 'processing' });
-    setLastInput(input); // Store the input for potential reload
-    
-    // Create AbortController for cancellation
-    const abortController = new AbortController();
-    setProcessingStatus(prev => ({
-      ...prev,
-      abortController
-    }));
-    
-    try {
-      let result: FileNode;
-      
-      if (input.type === 'github') {
-        try {
-          // Validate GitHub token if provided
-          if (options.githubToken) {
-            const tokenValidation = await validateGitHubToken(options.githubToken);
-            if (!tokenValidation.valid) {
-              setError('Invalid GitHub token. Please check your token in settings.');
-              setProcessingStatus(prev => ({ 
-                ...prev, 
-                status: 'error',
-                error: 'Invalid GitHub token'
-              }));
-              setIsLoading(false);
-              return;
-            }
+  // Render the current view based on viewType
+  const renderView = () => {
+    if (!data) return null;
+
+    switch (viewType) {
+      case 'tree':
+        return <TreeView data={data} darkMode={options.darkMode} />;
+      case 'graph':
+        return <GraphView data={data} darkMode={options.darkMode} />;
+      case 'text':
+        return <TextView data={data} darkMode={options.darkMode} />;
+      case 'comprehension':
+        return <ComprehensionView data={data} darkMode={options.darkMode} />;
+      default:
+        return <TreeView data={data} darkMode={options.darkMode} />;
+    }
+  };
+
+  // Apply dark mode class to body
+  useEffect(() => {
+    if (options.darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [options.darkMode]);
+
+  // Apply RTL direction for Persian language
+  useEffect(() => {
+    if (i18n.language === 'fa') {
+      document.documentElement.dir = 'rtl';
+      document.documentElement.classList.add('font-persian');
+    } else {
+      document.documentElement.dir = 'ltr';
+      document.documentElement.classList.remove('font-persian');
+    }
+  }, [i18n.language]);
+
+  // Help modal content
+  const HelpModal = () => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto ${options.darkMode ? 'text-white' : 'text-gray-800'}`}>
+        <div className="flex items-center justify-between border-b px-6 py-4 dark:border-gray-700">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <HelpCircle className="w-5 h-5" />
+            <span>{t('help.title')}</span>
+          </h2>
+          <button
+            onClick={() => setShowHelp(false)}
+            className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 focus:outline-none"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        
+        <div className="px-6 py-4">
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-medium mb-2">{t('help.gettingStarted')}</h3>
+              <p className="mb-2">{t('help.gettingStartedDesc')}</p>
+              <ol className="list-decimal pl-5 space-y-1">
+                <li>{t('quickStart.steps.0')}</li>
+                <li>{t('quickStart.steps.1')}</li>
+                <li>{t('quickStart.steps.2')}</li>
+                <li>{t('quickStart.steps.3')}</li>
+              </ol>
+            </div>
             
-            logger.info('GitHub token validated', { 
-              username: tokenValidation.username,
-              rateLimit: tokenValidation.rateLimit
-            });
+            <div>
+              <h3 className="text-lg font-medium mb-2">{t('help.viewTypes')}</h3>
+              <ul className="space-y-3">
+                <li className="flex items-start gap-2">
+                  <FolderTree className="w-5 h-5 mt-0.5 text-blue-500" />
+                  <div>
+                    <strong>{t('views.tree')}:</strong> {t('help.treeViewDesc')}
+                  </div>
+                </li>
+                <li className="flex items-start gap-2">
+                  <BarChart2 className="w-5 h-5 mt-0.5 text-blue-500" />
+                  <div>
+                    <strong>{t('views.graph')}:</strong> {t('help.graphViewDesc')}
+                  </div>
+                </li>
+                <li className="flex items-start gap-2">
+                  <FileText className="w-5 h-5 mt-0.5 text-blue-500" />
+                  <div>
+                    <strong>{t('views.text')}:</strong> {t('help.textViewDesc')}
+                  </div>
+                </li>
+                <li className="flex items-start gap-2">
+                  <BookOpen className="w-5 h-5 mt-0.5 text-blue-500" />
+                  <div>
+                    <strong>{t('views.comprehension')}:</strong> {t('help.comprehensionViewDesc')}
+                  </div>
+                </li>
+              </ul>
+            </div>
             
-            // Show rate limit information
-            if (tokenValidation.rateLimit && tokenValidation.rateLimit.remaining < 10) {
-              logger.warn('GitHub API rate limit low', { 
-                remaining: tokenValidation.rateLimit.remaining,
-                reset: tokenValidation.rateLimit.reset
-              });
-            }
-          }
-          
-          result = await fetchGitHubContents(input.value, options, abortController.signal);
-        } catch (error) {
-          if (error.name === 'AbortError') {
-            setError('Operation cancelled by user');
-            return;
-          }
-          if (error.message.includes('timed out')) {
-            setProcessingStatus(prev => ({ 
-              ...prev, 
-              status: 'timeout',
-              error: 'Request timed out. Please try again.'
-            }));
-            setError('Request timed out. Please try again.');
-          } else if (error.message.includes('rate limit')) {
-            setError(
-              options.githubToken
-                ? 'GitHub API rate limit exceeded. Please try again later.'
-                : 'GitHub API rate limit exceeded. Consider adding a personal access token in settings.'
-            );
-          } else {
-            setError(error.message);
-          }
-          setProcessingStatus(prev => ({ 
-            ...prev, 
-            status: 'error',
-            error: error.message
-          }));
-          setIsLoading(false);
-          return;
-        }
-      } else {
-        try {
-          result = await parseLocalPath(input.value);
-        } catch (error) {
-          if (error.name === 'AbortError') {
-            setError('Operation cancelled by user');
-            return;
-          }
-          if (error.name === 'SecurityError' || error.message.includes('Permission denied')) {
-            setError(
-              'Permission denied. Please grant access to the directory. Note that some system directories may be restricted.'
-            );
-          } else if (error.name === 'AbortError' || error.message.includes('cancelled')) {
-            setError('Directory selection was cancelled. Please try again.');
-          } else if (error.message.includes('File System Access API')) {
-            setError(
-              'Your browser does not support directory access. Please use Chrome, Edge, or Opera.'
-            );
-          } else {
-            setError('Failed to read directory. Please try again or choose a different directory.');
-          }
-          setProcessingStatus(prev => ({ 
-            ...prev, 
-            status: 'error',
-            error: error.message
-          }));
-          setIsLoading(false);
-          return;
-        }
-      }
-      
-      const filteredResult = filterNodesBySettings(result, options);
-      setData(filteredResult);
-      setProcessingStatus(prev => ({ ...prev, status: 'complete' }));
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An error occurred';
-      setError(errorMessage);
-      setProcessingStatus(prev => ({ 
-        ...prev, 
-        status: 'error',
-        error: errorMessage
-      }));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleCancelOperation = () => {
-    if (processingStatus.abortController) {
-      processingStatus.abortController.abort();
-      setProcessingStatus(prev => ({
-        ...prev,
-        status: 'idle',
-        abortController: undefined
-      }));
-    }
-  };
-
-  const handleReloadWithNewSettings = () => {
-    if (lastInput) {
-      handlePathSubmit(lastInput);
-    }
-  };
-
-  const filterNodesBySettings = (node: FileNode, options: VisualizationOptions): FileNode | null => {
-    // Check if the node should be excluded based on exclude patterns
-    if (node.type === 'directory' && options.excludePatterns.includes(node.name)) {
-      return null;
-    }
-
-    const isFileAllowed = (file: FileNode) => {
-      if (!file.extension) return true;
-      if (options.customExtensions.includes(`.${file.extension}`)) return true;
-      
-      return Object.entries(options.enabledFormats).some(([category, enabled]) => {
-        return enabled && DEFAULT_FILE_FORMATS[category as keyof typeof DEFAULT_FILE_FORMATS]
-          .some(ext => ext.endsWith(file.extension!));
-      });
-    };
-
-    const isNodeVisible = (node: FileNode) => {
-      if (node.type === 'directory') return true;
-      if (!options.showHidden && node.name.startsWith('.')) return false;
-      return isFileAllowed(node);
-    };
-
-    if (!isNodeVisible(node)) return null;
-
-    if (node.children) {
-      const filteredChildren = node.children
-        .map(child => filterNodesBySettings(child, options))
-        .filter(Boolean) as FileNode[];
-      
-      return { ...node, children: filteredChildren };
-    }
-
-    return node;
-  };
-
-  const handleSave = () => {
-    if (data) {
-      saveOutput(data, viewMode);
-    }
-  };
-
-  return (
-    <div className={`min-h-screen transition-colors ${
-      options.darkMode ? 'bg-gray-900 text-white' : 'bg-gradient-to-b from-gray-50 to-gray-100'
-    }`}>
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className={`rounded-lg shadow-lg ${
-          options.darkMode ? 'bg-gray-800' : 'bg-white'
-        }`}>
-          <div className={`border-b px-6 py-4 ${
-            options.darkMode
-              ? 'bg-gradient-to-r from-blue-900 to-blue-800 border-gray-700'
-              : 'bg-gradient-to-r from-blue-600 to-blue-700'
-          }`}>
-            <div className="flex justify-between items-center">
-              <h1 className="text-2xl font-semibold text-white flex items-center gap-2">
-                <FolderTree className="w-6 h-6" />
-                FolderFusionX (FFX)
-              </h1>
-              <div className="flex items-center gap-2">
-                <VersionInfo darkMode={options.darkMode} />
-                <button
-                  onClick={toggleDarkMode}
-                  className="p-2 rounded-full hover:bg-white/10 transition-colors"
-                  title={options.darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-                >
-                  {options.darkMode ? (
-                    <Sun className="w-5 h-5 text-yellow-300" />
-                  ) : (
-                    <Moon className="w-5 h-5 text-white" />
-                  )}
-                </button>
-              </div>
+            <div>
+              <h3 className="text-lg font-medium mb-2">{t('settings.title')}</h3>
+              <p>{t('help.settingsDesc')}</p>
+              <ul className="list-disc pl-5 space-y-1 mt-2">
+                <li>{t('settings.githubApi')}</li>
+                <li>{t('settings.fileFormats')}</li>
+                <li>{t('settings.excludedFolders')}</li>
+                <li>{t('settings.maxDepth')}</li>
+                <li>{t('settings.darkMode')}</li>
+              </ul>
             </div>
-            <p className={`mt-1 ${options.darkMode ? 'text-blue-200' : 'text-blue-100'}`}>
-              Visualize and analyze directory structures with ease
-            </p>
-          </div>
-
-          <div className="px-6 py-4">
-            <PathInput onSubmit={handlePathSubmit} isLoading={isLoading} darkMode={options.darkMode} />
-            <div className="mt-3">
-              <ProgressBar
-                status={processingStatus}
-                onCancel={handleCancelOperation}
-                darkMode={options.darkMode}
-              />
-            </div>
-            {error && (
-              <div className={`mt-2 p-3 rounded-md border ${
-                options.darkMode
-                  ? 'bg-red-900/50 text-red-200 border-red-800'
-                  : 'bg-red-50 text-red-700 border-red-200'
-              }`}>
-                {error}
-              </div>
-            )}
-          </div>
-
-          <div className={`border-b px-6 py-3 flex items-center justify-between ${
-            options.darkMode ? 'bg-gray-800 border-gray-700' : 'bg-gray-50'
-          }`}>
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => setViewMode('tree')}
-                className={`px-4 py-2 rounded-md transition-colors ${
-                  viewMode === 'tree'
-                    ? options.darkMode
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-blue-500 text-white'
-                    : options.darkMode
-                    ? 'bg-gray-700 text-gray-200 hover:bg-gray-600'
-                    : 'bg-white text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                <FolderTree className="w-4 h-4 inline-block mr-2" />
-                Tree View
-              </button>
-              <button
-                onClick={() => setViewMode('graph')}
-                className={`px-4 py-2 rounded-md transition-colors ${
-                  viewMode === 'graph'
-                    ? options.darkMode
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-blue-500 text-white'
-                    : options.darkMode
-                    ? 'bg-gray-700 text-gray-200 hover:bg-gray-600'
-                    : 'bg-white text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                <GitBranch className="w-4 h-4 inline-block mr-2" />
-                Graph View
-              </button>
-              <button
-                onClick={() => setViewMode('text')}
-                className={`px-4 py-2 rounded-md transition-colors ${
-                  viewMode === 'text'
-                    ? options.darkMode
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-blue-500 text-white'
-                    : options.darkMode
-                    ? 'bg-gray-700 text-gray-200 hover:bg-gray-600'
-                    : 'bg-white text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                <FileText className="w-4 h-4 inline-block mr-2" />
-                Text View
-              </button>
-              <button
-                onClick={() => setViewMode('comprehension')}
-                className={`px-4 py-2 rounded-md transition-colors ${
-                  viewMode === 'comprehension'
-                    ? options.darkMode
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-blue-500 text-white'
-                    : options.darkMode
-                    ? 'bg-gray-700 text-gray-200 hover:bg-gray-600'
-                    : 'bg-white text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                <BookOpen className="w-4 h-4 inline-block mr-2" />
-                Comprehension
-              </button>
-            </div>
-            <div className="flex items-center space-x-2">
-              {lastInput && (
-                <button 
-                  onClick={handleReloadWithNewSettings}
-                  className={`p-2 rounded-md transition-colors ${
-                    options.darkMode
-                      ? 'hover:bg-gray-700 text-gray-400 hover:text-gray-200'
-                      : 'hover:bg-gray-100 text-gray-600'
-                  }`}
-                  title="Reload with current settings"
-                >
-                  <RefreshCw className="w-5 h-5" />
-                </button>
-              )}
-              <button 
-                onClick={resetSettings}
-                className={`p-2 rounded-md transition-colors ${
-                  options.darkMode
-                    ? 'hover:bg-gray-700 text-gray-400 hover:text-gray-200'
-                    : 'hover:bg-gray-100 text-gray-600'
-                }`}
-                title="Reset Settings"
-              >
-                <RotateCcw className="w-5 h-5" />
-              </button>
-              <button 
-                onClick={() => setIsSettingsOpen(true)}
-                className={`p-2 rounded-md transition-colors ${
-                  options.darkMode
-                    ? 'hover:bg-gray-700 text-gray-400 hover:text-gray-200'
-                    : 'hover:bg-gray-100 text-gray-600'
-                }`}
-                title="Settings"
-              >
-                <Settings className="w-5 h-5" />
-              </button>
-              <button 
-                onClick={handleSave}
-                className={`p-2 rounded-md transition-colors ${
-                  options.darkMode
-                    ? 'hover:bg-gray-700 text-gray-400 hover:text-gray-200'
-                    : 'hover:bg-gray-100 text-gray-600'
-                }`}
-                title="Save Output"
-                disabled={!data}
-              >
-                <Download className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-
-          <div className="p-6">
-            {!data && !isLoading && (
-              <div className={`text-center py-12 ${
-                options.darkMode ? 'text-gray-300' : ''
-              }`}>
-                <FolderTree className={`w-16 h-16 mx-auto mb-4 ${
-                  options.darkMode ? 'text-gray-600' : 'text-gray-300'
-                }`} />
-                <h2 className={`text-xl font-medium mb-2 ${
-                  options.darkMode ? 'text-gray-100' : 'text-gray-900'
-                }`}>
-                  Ready to Visualize
-                </h2>
-                <p className={options.darkMode ? 'text-gray-400' : 'text-gray-500'}>
-                  Select a local directory or enter a GitHub URL to start exploring
-                </p>
-              </div>
-            )}
-            {isLoading && (
-              <div className="text-center py-12">
-                <div className={`animate-spin w-12 h-12 border-4 rounded-full mx-auto mb-4 ${
-                  options.darkMode
-                    ? 'border-blue-500 border-t-transparent'
-                    : 'border-blue-500 border-t-transparent'
-                }`}></div>
-                <p className={options.darkMode ? 'text-gray-400' : 'text-gray-500'}>
-                  Processing directory structure...
-                </p>
-              </div>
-            )}
-            {data && (
-              <div className={`border rounded-lg overflow-hidden ${
-                options.darkMode ? 'border-gray-700' : ''
-              }`}>
-                {viewMode === 'tree' && <TreeView data={data} darkMode={options.darkMode} />}
-                {viewMode === 'graph' && <GraphView data={data} darkMode={options.darkMode} />}
-                {viewMode === 'text' && <TextView data={data} darkMode={options.darkMode} />}
-                {viewMode === 'comprehension' && (
-                  <ComprehensionView data={data} darkMode={options.darkMode} />
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className={`border-t px-6 py-4 ${
-            options.darkMode
-              ? 'bg-gray-800 border-gray-700'
-              : 'bg-gray-50'
-          }`}>
-            <div className="flex justify-between items-center">
-              <p className={options.darkMode ? 'text-gray-400' : 'text-gray-500'}>
-                © 2025 Folder Fusion X (FFX). All rights reserved.
-              </p>
-              <div className="flex items-center gap-4">
-                <a
-                  href="https://www.coffeete.ir/AhmadR3zA"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`flex items-center gap-2 transition-colors ${
-                    options.darkMode
-                      ? 'text-gray-400 hover:text-amber-400'
-                      : 'text-gray-600 hover:text-amber-500'
-                  }`}
-                >
-                  <Coffee className="w-4 h-4" />
-                  <span className="text-sm">Buy me a coffee</span>
-                </a>
-                <a
-                  href={GITHUB_REPO}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`flex items-center gap-2 transition-colors ${
-                    options.darkMode
-                      ? 'text-gray-400 hover:text-blue-400'
-                      : 'text-gray-600 hover:text-blue-500'
-                  }`}
-                >
-                  <Github className="w-4 h-4" />
-                  <span className="text-sm">View on GitHub</span>
-                </a>
-                <a
-                  href="https://github.com/LaneZero/DirTreePhoria"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`flex items-center gap-2 transition-colors ${
-                    options.darkMode
-                      ? 'text-gray-400 hover:text-amber-400'
-                      : 'text-gray-600 hover:text-amber-500'
-                  }`}
-                >
-                  <Link className="w-4 h-4" />
-                  <span className="text-sm">DirTreePhoria</span>
-                </a>
-              </div>
+            
+            <div>
+              <h3 className="text-lg font-medium mb-2">{t('help.tips')}</h3>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>{t('quickStart.steps.4')}</li>
+                <li>{t('quickStart.steps.3')}</li>
+                <li>{t('quickStart.steps.2')}</li>
+                <li>{t('quickStart.steps.1')}</li>
+              </ul>
             </div>
           </div>
         </div>
+        
+        <div className="border-t px-6 py-4 flex justify-end dark:border-gray-700">
+          <button
+            onClick={() => setShowHelp(false)}
+            className={`px-4 py-2 rounded-md transition-colors ${
+              options.darkMode 
+                ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                : 'bg-blue-500 hover:bg-blue-600 text-white'
+            }`}
+          >
+            {t('help.gotIt')}
+          </button>
+        </div>
       </div>
+    </div>
+  );
+
+  return (
+    <div className={`min-h-screen ${options.darkMode ? 'dark bg-gray-900 text-white' : 'bg-gray-50 text-gray-900'}`}>
+      <header className={`py-3 px-4 md:px-6 ${options.darkMode ? 'bg-gray-800' : 'bg-white'} shadow-sm sticky top-0 z-10`}>
+        <div className="container mx-auto flex justify-between items-center">
+          <div className="flex items-center space-x-2">
+            <FileCode className={`w-6 h-6 ${options.darkMode ? 'text-blue-400' : 'text-blue-600'}`} />
+            <h1 className="text-xl font-bold">{t('app.title')}</h1>
+          </div>
+          <div className="flex items-center space-x-2">
+            <CryptoWallet darkMode={options.darkMode} />
+            <LanguageSwitcher darkMode={options.darkMode} />
+            <button
+              onClick={() => setShowHelp(true)}
+              className={`p-2 rounded-full ${options.darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
+              aria-label="Help"
+              title={t('header.help')}
+            >
+              <HelpCircle className={`w-5 h-5 ${options.darkMode ? 'text-gray-300' : 'text-gray-600'}`} />
+            </button>
+            <button
+              onClick={toggleDarkMode}
+              className={`p-2 rounded-full ${options.darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
+              aria-label="Toggle dark mode"
+              title={options.darkMode ? t('header.lightMode') : t('header.darkMode')}
+            >
+              {options.darkMode ? (
+                <Sun className="w-5 h-5 text-yellow-300" />
+              ) : (
+                <Moon className="w-5 h-5 text-gray-600" />
+              )}
+            </button>
+            <button
+              onClick={() => setShowSettings(true)}
+              className={`p-2 rounded-full ${options.darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
+              aria-label="Settings"
+              title={t('header.settings')}
+            >
+              <Settings className={`w-5 h-5 ${options.darkMode ? 'text-gray-300' : 'text-gray-600'}`} />
+            </button>
+            <a
+              href="https://github.com/LaneZero/FolderFusionX"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`p-2 rounded-full ${options.darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
+              aria-label="GitHub Repository"
+              title={t('header.github')}
+            >
+              <Github className={`w-5 h-5 ${options.darkMode ? 'text-gray-300' : 'text-gray-600'}`} />
+            </a>
+          </div>
+        </div>
+      </header>
+
+      <main className="container mx-auto py-6 px-4">
+        <section className="mb-8">
+          <PathInput 
+            onSubmit={handleDirectorySubmit} 
+            isLoading={isLoading}
+            darkMode={options.darkMode}
+          />
+          
+          {(processingStatus.status !== 'idle' || options.showProgressBar) && (
+            <div className="mt-4">
+              <ProgressBar 
+                status={processingStatus} 
+                onCancel={handleCancelProcessing}
+                darkMode={options.darkMode}
+              />
+            </div>
+          )}
+        </section>
+
+        {data && (
+          <>
+            <section className="mb-6">
+              <div className={`flex flex-wrap gap-2 p-2 rounded-lg ${options.darkMode ? 'bg-gray-800' : 'bg-white'} shadow-sm`}>
+                <button
+                  onClick={() => setViewType('tree')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${
+                    viewType === 'tree'
+                      ? options.darkMode
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-blue-500 text-white'
+                      : options.darkMode
+                      ? 'hover:bg-gray-700 text-gray-300'
+                      : 'hover:bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  <FolderTree className="w-4 h-4" />
+                  <span>{t('views.tree')}</span>
+                </button>
+                <button
+                  onClick={() => setViewType('graph')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${
+                    viewType === 'graph'
+                      ? options.darkMode
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-blue-500 text-white'
+                      : options.darkMode
+                      ? 'hover:bg-gray-700 text-gray-300'
+                      : 'hover:bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  <BarChart2 className="w-4 h-4" />
+                  <span>{t('views.graph')}</span>
+                </button>
+                <button
+                  onClick={() => setViewType('text')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${
+                    viewType === 'text'
+                      ? options.darkMode
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-blue-500 text-white'
+                      : options.darkMode
+                      ? 'hover:bg-gray-700 text-gray-300'
+                      : 'hover:bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>{t('views.text')}</span>
+                </button>
+                <button
+                  onClick={() => setViewType('comprehension')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${
+                    viewType === 'comprehension'
+                      ? options.darkMode
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-blue-500 text-white'
+                      : options.darkMode
+                      ? 'hover:bg-gray-700 text-gray-300'
+                      : 'hover:bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  <BookOpen className="w-4 h-4" />
+                  <span>{t('views.comprehension')}</span>
+                </button>
+                <button
+                  onClick={() => {
+                    // Reload with current settings
+                    window.location.reload();
+                  }}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ml-auto ${
+                    options.darkMode
+                      ? 'hover:bg-gray-700 text-gray-300'
+                      : 'hover:bg-gray-100 text-gray-700'
+                  }`}
+                  title={t('views.reload')}
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span className="hidden sm:inline">{t('views.reload')}</span>
+                </button>
+              </div>
+            </section>
+
+            <section className={`rounded-lg overflow-hidden shadow-sm ${options.darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+              {renderView()}
+            </section>
+          </>
+        )}
+
+        {!data && !isLoading && (
+          <section className={`text-center py-8 ${options.darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+            <div className="max-w-4xl mx-auto">
+              <div className="flex justify-center mb-6">
+                <div className={`p-4 rounded-full ${options.darkMode ? 'bg-blue-900/30' : 'bg-blue-100'}`}>
+                  <FileCode className={`w-16 h-16 ${options.darkMode ? 'text-blue-400' : 'text-blue-600'}`} />
+                </div>
+              </div>
+              
+              <h2 className="text-3xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-purple-600">
+                {t('app.welcome')}
+              </h2>
+              
+              <p className="text-lg mb-8 max-w-2xl mx-auto">
+                {t('app.description')}
+              </p>
+              
+              {/* Feature Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+                <div className={`rounded-xl p-6 text-left transition-transform hover:scale-105 ${
+                  options.darkMode ? 'bg-gray-800 shadow-lg shadow-blue-900/10' : 'bg-white shadow-lg shadow-blue-100/50'
+                }`}>
+                  <div className={`rounded-full w-12 h-12 flex items-center justify-center mb-4 ${
+                    options.darkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-600'
+                  }`}>
+                    <Eye className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">Multiple Views</h3>
+                  <p className={`text-sm ${options.darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                    Visualize your directories in tree, graph, text, or comprehension views for different perspectives.
+                  </p>
+                </div>
+                
+                <div className={`rounded-xl p-6 text-left transition-transform hover:scale-105 ${
+                  options.darkMode ? 'bg-gray-800 shadow-lg shadow-purple-900/10' : 'bg-white shadow-lg shadow-purple-100/50'
+                }`}>
+                  <div className={`rounded-full w-12 h-12 flex items-center justify-center mb-4 ${
+                    options.darkMode ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-600'
+                  }`}>
+                    <Github className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">GitHub Integration</h3>
+                  <p className={`text-sm ${options.darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                    Explore any GitHub repository structure without cloning, with support for private repos.
+                  </p>
+                </div>
+                
+                <div className={`rounded-xl p-6 text-left transition-transform hover:scale-105 ${
+                  options.darkMode ? 'bg-gray-800 shadow-lg shadow-green-900/10' : 'bg-white shadow-lg shadow-green-100/50'
+                }`}>
+                  <div className={`rounded-full w-12 h-12 flex items-center justify-center mb-4 ${
+                    options.darkMode ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-600'
+                  }`}>
+                    <Zap className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">Performance Optimized</h3>
+                  <p className={`text-sm ${options.darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                    Fast loading with caching and batch processing for smooth visualization of large directories.
+                  </p>
+                </div>
+                
+                <div className={`rounded-xl p-6 text-left transition-transform hover:scale-105 ${
+                  options.darkMode ? 'bg-gray-800 shadow-lg shadow-amber-900/10' : 'bg-white shadow-lg shadow-amber-100/50'
+                }`}>
+                  <div className={`rounded-full w-12 h-12 flex items-center justify-center mb-4 ${
+                    options.darkMode ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-100 text-amber-600'
+                  }`}>
+                    <Code className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">Developer Friendly</h3>
+                  <p className={`text-sm ${options.darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                    Export visualizations as JSON, PNG, or text for documentation and sharing with your team.
+                  </p>
+                </div>
+              </div>
+              
+              {/* Quick Start Section */}
+              <div className={`rounded-xl p-8 mb-8 text-left ${
+                options.darkMode ? 'bg-gradient-to-br from-gray-800 to-gray-900' : 'bg-gradient-to-br from-white to-blue-50'
+              }`}>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className={`rounded-full p-2 ${
+                    options.darkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-600'
+                  }`}>
+                    <Layers className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-xl font-bold">{t('quickStart.title')}</h3>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <ol className="space-y-3">
+                      {t('quickStart.steps', { returnObjects: true }).slice(0, 3).map((step, index) => (
+                        <li key={index} className="flex items-start gap-3">
+                          <div className={`rounded-full w-6 h-6 flex items-center justify-center mt-0.5 flex-shrink-0 ${
+                            options.darkMode ? 'bg-blue-900/50 text-blue-300' : 'bg-blue-100 text-blue-600'
+                          }`}>
+                            <span className="text-sm font-medium">{index + 1}</span>
+                          </div>
+                          <span>{step}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                  <div>
+                    <ol className="space-y-3" start={4}>
+                      {t('quickStart.steps', { returnObjects: true }).slice(3).map((step, index) => (
+                        <li key={index + 3} className="flex items-start gap-3">
+                          <div className={`rounded-full w-6 h-6 flex items-center justify-center mt-0.5 flex-shrink-0 ${
+                            options.darkMode ? 'bg-blue-900/50 text-blue-300' : 'bg-blue-100 text-blue-600'
+                          }`}>
+                            <span className="text-sm font-medium">{index + 4}</span>
+                          </div>
+                          <span>{step}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex justify-center gap-4">
+                <button
+                  onClick={() => setShowHelp(true)}
+                  className={`px-6 py-3 rounded-lg transition-colors flex items-center gap-2 ${
+                    options.darkMode 
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                      : 'bg-blue-500 hover:bg-blue-600 text-white'
+                  }`}
+                >
+                  <HelpCircle className="w-5 h-5" />
+                  {t('buttons.learnMore')}
+                </button>
+                
+                <a
+                  href="https://github.com/LaneZero/FolderFusionX"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`px-6 py-3 rounded-lg transition-colors flex items-center gap-2 ${
+                    options.darkMode 
+                      ? 'bg-gray-700 hover:bg-gray-600 text-white' 
+                      : 'bg-gray-200 hover:bg-gray-300 text-gray-800'
+                  }`}
+                >
+                  <Github className="w-5 h-5" />
+                  View on GitHub
+                </a>
+              </div>
+            </div>
+          </section>
+        )}
+      </main>
+
+      <footer className={`py-4 px-6 mt-8 ${options.darkMode ? 'bg-gray-800 text-gray-400' : 'bg-white text-gray-600'} border-t`}>
+        <div className="container mx-auto flex flex-col md:flex-row justify-between items-center text-sm">
+          <div className="mb-2 md:mb-0">
+            <VersionInfo darkMode={options.darkMode} />
+          </div>
+          <div>
+            &copy; {new Date().getFullYear()} {t('app.title')}. {t('footer.copyright')}
+          </div>
+        </div>
+      </footer>
 
       <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
         options={options}
         onOptionsChange={setOptions}
       />
+      
+      {showHelp && <HelpModal />}
     </div>
   );
 }

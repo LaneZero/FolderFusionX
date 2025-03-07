@@ -1,25 +1,52 @@
 FolderFusionX v1.1.0
+English:
+2025/03/01
 
-Release Date: October 25, 2025
-
-Change Log:
-- Fixed "Excluded Folders" functionality to properly filter out specified directories
-- Added reload button to refresh visualization with updated settings
-- Improved dark mode support for input fields and form elements
-- Fixed Link icon reference in footer section
-- Updated repository URLs and project naming throughout the application
-- Improved error handling for directory access permissions
-- Enhanced UI responsiveness for various screen sizes
-- Fixed local storage key naming for consistent settings persistence
+Changes:
+-Fixed the issue with the "Excluded Folders" functionality to correctly filter specified folders
+-Added a Reload button to update the display with new settings
+-Improved dark mode support for input fields and form elements
+-Fixed the icon reference issue in the footer section
+-Updated repository URLs and project naming across the application
+-Enhanced error handling for folder access
+-Improved UI responsiveness for different screen sizes
+-Fixed the local storage key naming issue to ensure persistent settings
 
 Known Issues:
-- Large repositories (>10,000 files) may cause performance issues
-- Some system directories may be restricted due to browser security policies
-- GitHub API rate limits apply (60 requests/hour without authentication)
+-Large repositories (over 10,000 files) may cause performance issues
+-Some system folders may be restricted due to browser security policies
+-GitHub API limitations apply (60 requests per hour without authentication)
 
-Upcoming Features:
-- File content search
-- Comparison between directories
-- Collaborative sharing
-- Custom visualization themes
-- Offline mode support
+Future Features:
+-File content search
+-Folder comparison
+-Collaborative sharing
+-Custom display themes
+-Offline mode support
+
+---------------
+---------------
+فارسی
+تاریخ انتشار: ۳ آبان ۱۴۰۴
+
+تغییرات:
+- رفع مشکل عملکرد "پوشه‌های مستثنی" برای فیلتر صحیح پوشه‌های مشخص شده
+- اضافه شدن دکمه بارگذاری مجدد برای به‌روزرسانی نمایش با تنظیمات جدید
+- بهبود پشتیبانی از حالت تاریک برای فیلدهای ورودی و المان‌های فرم
+- رفع مشکل ارجاع آیکون در بخش پاورقی
+- به‌روزرسانی آدرس‌های مخزن و نام‌گذاری پروژه در سراسر برنامه
+- بهبود مدیریت خطا برای دسترسی‌های پوشه
+- بهبود واکنش‌پذیری رابط کاربری برای اندازه‌های مختلف صفحه نمایش
+- رفع مشکل نام‌گذاری کلید ذخیره‌سازی محلی برای حفظ پایدار تنظیمات
+
+مشکلات شناخته شده:
+- مخازن بزرگ (بیش از ۱۰،۰۰۰ فایل) ممکن است باعث مشکلات عملکردی شوند
+- برخی پوشه‌های سیستمی ممکن است به دلیل سیاست‌های امنیتی مرورگر محدود شوند
+- محدودیت‌های API گیت‌هاب اعمال می‌شود (۶۰ درخواست در ساعت بدون احراز هویت)
+
+ویژگی‌های آینده:
+- جستجوی محتوای فایل
+- مقایسه بین پوشه‌ها
+- اشتراک‌گذاری مشارکتی
+- تم‌های سفارشی نمایش
+- پشتیبانی از حالت آفلاین

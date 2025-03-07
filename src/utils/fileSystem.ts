@@ -16,9 +16,13 @@ const DEFAULT_OPTIONS: VisualizationOptions = {
 };
 
 // Timeout and retry configuration
-const GITHUB_TIMEOUT = 60000; // 1 minute timeout
-const MAX_RETRIES = 3;
-const RETRY_DELAY = 2000; // 2 seconds between retries
+const GITHUB_TIMEOUT = 30000; // Reduced from 60000 to 30000 (30 seconds)
+const MAX_RETRIES = 2; // Reduced from 3 to 2
+const RETRY_DELAY = 1000; // Reduced from 2000 to 1000 (1 second)
+
+// Cache for GitHub API responses
+const apiCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
 
 /**
  * Delay function for retry mechanism
@@ -35,6 +39,36 @@ function timeout(ms: number) {
     setTimeout(() => {
       reject(new Error('Operation timed out'));
     }, ms);
+  });
+}
+
+/**
+ * Get cached response or null if not found or expired
+ * @param key Cache key
+ */
+function getCachedResponse(key: string) {
+  if (!apiCache.has(key)) return null;
+  
+  const { data, timestamp } = apiCache.get(key);
+  const now = Date.now();
+  
+  if (now - timestamp > CACHE_TTL) {
+    apiCache.delete(key);
+    return null;
+  }
+  
+  return data;
+}
+
+/**
+ * Set response in cache
+ * @param key Cache key
+ * @param data Response data
+ */
+function setCachedResponse(key: string, data: any) {
+  apiCache.set(key, {
+    data,
+    timestamp: Date.now()
   });
 }
 
@@ -190,7 +224,7 @@ export async function fetchGitHubContents(
 
     if (rateLimit.rate.remaining === 0) {
       const resetTime = new Date(rateLimit.rate.reset * 1000);
-      throw new Error(`GitHub API rate limit exceeded. Reset at ${resetTime.toLocaleString()}`);
+      throw new Error(`محدودیت API گیت‌هاب به پایان رسیده است. بازنشانی در ${resetTime.toLocaleString()}`);
     }
     
     // Track progress for the progress bar
@@ -214,8 +248,15 @@ export async function fetchGitHubContents(
       }
     };
     
-    // First pass to count total files for progress tracking
+    // First pass to count total files for progress tracking - now with caching
     async function countFiles(path: string): Promise<number> {
+      const cacheKey = `count:${owner}/${repo}/${path}`;
+      const cachedCount = getCachedResponse(cacheKey);
+      
+      if (cachedCount !== null) {
+        return cachedCount;
+      }
+      
       try {
         const response = await withRetry(
           () => octokit.rest.repos.getContent({
@@ -231,14 +272,21 @@ export async function fetchGitHubContents(
         }
         
         let count = 0;
+        const promises = [];
+        
         for (const item of response.data) {
           if (item.type === 'file') {
             count++;
           } else if (item.type === 'dir') {
-            count += await countFiles(item.path);
+            promises.push(countFiles(item.path));
           }
         }
         
+        // Process directory counts in parallel
+        const dirCounts = await Promise.all(promises);
+        count += dirCounts.reduce((sum, c) => sum + c, 0);
+        
+        setCachedResponse(cacheKey, count);
         return count;
       } catch (error) {
         if (error.name === 'AbortError') throw error;
@@ -248,6 +296,13 @@ export async function fetchGitHubContents(
     }
     
     async function fetchDirectory(path: string): Promise<FileNode> {
+      const cacheKey = `dir:${owner}/${repo}/${path}`;
+      const cachedDir = getCachedResponse(cacheKey);
+      
+      if (cachedDir !== null) {
+        return cachedDir;
+      }
+      
       try {
         const response = await withRetry(
           () => octokit.rest.repos.getContent({
@@ -269,48 +324,78 @@ export async function fetchGitHubContents(
           throw new Error('Not a directory');
         }
         
-        const children = await Promise.all(
-          response.data.map(async (item) => {
-            const node: FileNode = {
-              name: item.name,
-              path: item.path,
-              type: item.type === 'dir' ? 'directory' : 'file',
-              size: item.size
-            };
-            
-            if (item.type === 'file') {
-              updateProgress();
-              node.extension = item.name.includes('.') ? item.name.split('.').pop() : undefined;
-              try {
-                const fileContent = await withRetry(
-                  () => octokit.rest.repos.getContent({
-                    owner,
-                    repo,
-                    path: item.path,
-                    request: { signal }
-                  })
-                );
-                if ('content' in fileContent.data) {
-                  node.content = Buffer.from(fileContent.data.content, 'base64').toString();
-                }
-              } catch (error) {
-                logger.warn(`Could not fetch content for ${item.path}`, { error });
-              }
-            } else if (item.type === 'dir') {
-              const subDir = await fetchDirectory(item.path);
-              node.children = subDir.children;
-            }
-            
-            return node;
-          })
-        );
+        // Process children in batches to avoid overwhelming the API
+        const batchSize = 5;
+        const children = [];
         
-        return {
+        for (let i = 0; i < response.data.length; i += batchSize) {
+          const batch = response.data.slice(i, i + batchSize);
+          const batchResults = await Promise.all(
+            batch.map(async (item) => {
+              // Skip excluded directories early
+              if (item.type === 'dir' && options?.excludePatterns?.includes(item.name)) {
+                return null;
+              }
+              
+              const node: FileNode = {
+                name: item.name,
+                path: item.path,
+                type: item.type === 'dir' ? 'directory' : 'file',
+                size: item.size
+              };
+              
+              if (item.type === 'file') {
+                updateProgress();
+                node.extension = item.name.includes('.') ? item.name.split('.').pop() : undefined;
+                
+                // Only fetch content for small text files
+                if (item.size < 100000 && isTextFile(item.name)) {
+                  try {
+                    const contentCacheKey = `content:${owner}/${repo}/${item.path}`;
+                    const cachedContent = getCachedResponse(contentCacheKey);
+                    
+                    if (cachedContent !== null) {
+                      node.content = cachedContent;
+                    } else {
+                      const fileContent = await withRetry(
+                        () => octokit.rest.repos.getContent({
+                          owner,
+                          repo,
+                          path: item.path,
+                          request: { signal }
+                        })
+                      );
+                      if ('content' in fileContent.data) {
+                        node.content = Buffer.from(fileContent.data.content, 'base64').toString();
+                        setCachedResponse(contentCacheKey, node.content);
+                      }
+                    }
+                  } catch (error) {
+                    logger.warn(`Could not fetch content for ${item.path}`, { error });
+                  }
+                }
+              } else if (item.type === 'dir') {
+                const subDir = await fetchDirectory(item.path);
+                node.children = subDir.children;
+              }
+              
+              return node;
+            })
+          );
+          
+          // Filter out null values (excluded directories)
+          children.push(...batchResults.filter(Boolean));
+        }
+        
+        const result = {
           name: path.split('/').pop() || repo,
           path,
           type: 'directory',
           children
         };
+        
+        setCachedResponse(cacheKey, result);
+        return result;
       } catch (error) {
         if (error.name === 'AbortError') {
           throw error;
@@ -327,12 +412,22 @@ export async function fetchGitHubContents(
             hasToken: !!options?.githubToken
           });
           const rateLimitError = options?.githubToken
-            ? 'GitHub API rate limit exceeded. Please try again later.'
-            : 'GitHub API rate limit exceeded. Consider adding a personal access token in settings.';
+            ? 'محدودیت API گیت‌هاب به پایان رسیده است. لطفاً بعداً دوباره امتحان کنید.'
+            : 'محدودیت API گیت‌هاب به پایان رسیده است. لطفاً یک توکن دسترسی شخصی در تنظیمات اضافه کنید.';
           throw new Error(rateLimitError);
         }
         throw error;
       }
+    }
+    
+    // Helper to determine if a file is likely a text file
+    function isTextFile(filename: string): boolean {
+      const textExtensions = [
+        'txt', 'md', 'js', 'jsx', 'ts', 'tsx', 'json', 'html', 'css', 'scss',
+        'xml', 'yaml', 'yml', 'csv', 'py', 'java', 'c', 'cpp', 'h', 'sh', 'bat'
+      ];
+      const extension = filename.split('.').pop()?.toLowerCase();
+      return extension ? textExtensions.includes(extension) : false;
     }
     
     // Count total files first for progress tracking
@@ -358,10 +453,19 @@ export async function fetchGitHubContents(
         url,
         timeout: GITHUB_TIMEOUT
       });
-      throw new Error(`Request timed out after ${MAX_RETRIES} retries. Please try again later.`);
+      throw new Error(`درخواست پس از ${MAX_RETRIES} تلاش با تأخیر مواجه شد. لطفاً بعداً دوباره امتحان کنید.`);
+    }
+    if (error.status === 403) {
+      logger.error('GitHub API rate limit exceeded', {
+        hasToken: !!options?.githubToken
+      });
+      const rateLimitError = options?.githubToken
+        ? 'محدودیت API گیت‌هاب به پایان رسیده است. لطفاً بعداً دوباره امتحان کنید.'
+        : 'محدودیت API گیت‌هاب به پایان رسیده است. لطفاً یک توکن دسترسی شخصی در تنظیمات اضافه کنید.';
+      throw new Error(rateLimitError);
     }
     logger.error('GitHub API error', { error });
-    throw new Error(`GitHub Error: ${error.message}`);
+    throw new Error(`خطای گیت‌هاب: ${error.message}`);
   }
 }
 
@@ -375,39 +479,92 @@ export async function fetchGitHubContents(
 async function processDirectory(
   dirHandle: FileSystemDirectoryHandle,
   name: string,
-  path: string = name
+  path: string = name,
+  options?: VisualizationOptions
 ): Promise<FileNode> {
   const children: FileNode[] = [];
   
-  for await (const entry of dirHandle.values()) {
-    const entryPath = `${path}/${entry.name}`;
-    
-    if (entry.kind === 'file') {
-      const fileHandle = await dirHandle.getFileHandle(entry.name);
-      const file = await fileHandle.getFile();
-      
-      const node: FileNode = {
-        name: entry.name,
-        path: entryPath,
-        type: 'file',
-        size: file.size,
-        extension: entry.name.includes('.') ? entry.name.split('.').pop() : undefined
-      };
-      
-      children.push(node);
-    } else if (entry.kind === 'directory') {
-      const subDirHandle = await dirHandle.getDirectoryHandle(entry.name);
-      const subDir = await processDirectory(subDirHandle, entry.name, entryPath);
-      children.push(subDir);
-    }
+  // Skip excluded directories early
+  if (options?.excludePatterns?.includes(name)) {
+    return {
+      name,
+      path,
+      type: 'directory',
+      children: []
+    };
   }
   
-  return {
-    name,
-    path,
-    type: 'directory',
-    children
-  };
+  try {
+    // Process in batches to avoid UI freezing
+    const entries = [];
+    for await (const entry of dirHandle.values()) {
+      entries.push(entry);
+    }
+    
+    const batchSize = 20;
+    for (let i = 0; i < entries.length; i += batchSize) {
+      const batch = entries.slice(i, i + batchSize);
+      
+      // Process each batch in parallel
+      const batchResults = await Promise.all(
+        batch.map(async (entry) => {
+          const entryPath = `${path}/${entry.name}`;
+          
+          // Skip excluded directories early
+          if (entry.kind === 'directory' && options?.excludePatterns?.includes(entry.name)) {
+            return null;
+          }
+          
+          if (entry.kind === 'file') {
+            try {
+              const fileHandle = await dirHandle.getFileHandle(entry.name);
+              const file = await fileHandle.getFile();
+              
+              const node: FileNode = {
+                name: entry.name,
+                path: entryPath,
+                type: 'file',
+                size: file.size,
+                extension: entry.name.includes('.') ? entry.name.split('.').pop() : undefined
+              };
+              
+              return node;
+            } catch (error) {
+              logger.warn(`Could not process file ${entry.name}`, { error });
+              return null;
+            }
+          } else if (entry.kind === 'directory') {
+            try {
+              const subDirHandle = await dirHandle.getDirectoryHandle(entry.name);
+              const subDir = await processDirectory(subDirHandle, entry.name, entryPath, options);
+              return subDir;
+            } catch (error) {
+              logger.warn(`Could not process directory ${entry.name}`, { error });
+              return null;
+            }
+          }
+          
+          return null;
+        })
+      );
+      
+      // Filter out null values and add to children
+      children.push(...batchResults.filter(Boolean));
+      
+      // Allow UI to update between batches
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    
+    return {
+      name,
+      path,
+      type: 'directory',
+      children
+    };
+  } catch (error) {
+    logger.error('Failed to process directory', { error });
+    throw error;
+  }
 }
 
 /**
@@ -416,12 +573,12 @@ async function processDirectory(
  * @returns Promise<FileNode> representing the directory structure
  * @throws Error if unable to access the directory or if API is not supported
  */
-export async function parseLocalPath(path: string): Promise<FileNode> {
+export async function parseLocalPath(path: string, options?: VisualizationOptions): Promise<FileNode> {
   if (!('showDirectoryPicker' in window)) {
     logger.error('File System Access API not supported');
     throw new Error(
-      'Your browser does not support the File System Access API. ' +
-      'Please use a modern browser like Chrome, Edge, or Opera.'
+      'مرورگر شما از API دسترسی به فایل پشتیبانی نمی‌کند. ' +
+      'لطفاً از مرورگر مدرن مانند کروم، اج یا اپرا استفاده کنید.'
     );
   }
   
@@ -430,18 +587,18 @@ export async function parseLocalPath(path: string): Promise<FileNode> {
       mode: 'read'
     });
     
-    return processDirectory(dirHandle, dirHandle.name);
+    return processDirectory(dirHandle, dirHandle.name, dirHandle.name, options);
   } catch (error) {
     if (error.name === 'AbortError') {
       logger.info('Directory selection cancelled by user');
-      throw new Error('Directory selection was cancelled.');
+      throw new Error('انتخاب پوشه لغو شد.');
     }
-    if (error.name === 'SecurityError') {
-      logger.error('Permission denied for directory access');
-      throw new Error('Permission denied. Please grant access to the directory.');
+    if (error.name === 'SecurityError' || error.message?.includes('permission')) {
+      logger.error('Permission denied for directory access', { error });
+      throw new Error('دسترسی رد شد. لطفاً هنگام درخواست مرورگر، دسترسی به پوشه را مجاز کنید.');
     }
     logger.error('Failed to read local directory', { error });
-    throw new Error('Unable to read local directory. Please check permissions and try again.');
+    throw new Error('خطا در خواندن پوشه محلی. لطفاً دسترسی‌ها را بررسی کرده و دوباره امتحان کنید.');
   }
 }
 

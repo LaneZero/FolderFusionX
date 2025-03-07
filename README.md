@@ -1,9 +1,3 @@
-<div  align=center  markdown="1">
-
-![MainLogoFFX](https://github-production-user-asset-6210df.s3.amazonaws.com/46918547/415826325-86faa40b-0cd6-458b-a1fe-51f904618309.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAVCODYLSA53PQK4ZA/20250221/us-east-1/s3/aws4_request&X-Amz-Date=20250221T211901Z&X-Amz-Expires=300&X-Amz-Signature=d52679fcbc7da419d0537191b9e68182319668dbf533ec8bb9af043af629a98c&X-Amz-SignedHeaders=host)
-
-</div> 
-
 # Directory Visualizer
 
 A powerful and intuitive tool for visualizing directory structures with multiple view options.
@@ -20,6 +14,8 @@ A powerful and intuitive tool for visualizing directory structures with multiple
 - 🌓 Dark Mode: Toggle between light and dark themes for comfortable viewing
 - 💾 Export Options: Save visualizations as JSON, PNG, or plain text
 - 🔑 GitHub Integration: Use personal access tokens for private repositories
+- 🔄 Reload Feature: Refresh visualization with updated settings
+- 🚀 Performance Optimized: Fast loading with caching and batch processing
 
 ## Software Compatibility
 
@@ -71,6 +67,35 @@ npm run dev
 # Build for production
 npm run build
 ```
+
+## Deployment
+
+This project can be deployed to GitHub Pages using the following steps:
+
+1. Fork this repository to your GitHub account
+2. Clone your forked repository
+3. Make any desired changes
+4. Push your changes to GitHub
+5. Enable GitHub Pages in your repository settings
+6. The GitHub Actions workflow will automatically deploy your site
+
+Alternatively, you can manually deploy using:
+
+```bash
+# Build the project
+npm run build
+
+# Deploy to GitHub Pages
+npm run deploy
+```
+
+## Security
+
+- GitHub tokens are stored securely in your browser's session storage
+- Tokens are never sent to any server other than GitHub's API
+- Session storage is cleared when you close your browser
+- We recommend using tokens with minimal permissions (public_repo scope only)
+- Never share your personal access tokens with anyone
 
 ## Contributing
 
