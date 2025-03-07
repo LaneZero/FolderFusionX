@@ -1,0 +1,62 @@
+Directory Tree Generated on 03/07/2025 16:02:04
+Path: H:\Partition 01 - NTFS - 97.65 GB\Root\Git\MyRepository\FolderFusionX
+─────────────────────────
+Statistics:
+Total Files: 42
+Total Folders: 10
+Total Size: 0.92 MB
+Duration: 0.0330081 seconds
+─────────────────────────
+
+├── .github
+│   ├── workflows
+│   │   ├── deploy.yml
+├── dist
+│   ├── assets
+│   │   ├── index-cXJPNGHn.css
+│   │   ├── index-PzOb0K1W.js
+│   ├── index.html
+├── src
+│   ├── components
+│   │   ├── ComprehensionView.tsx
+│   │   ├── CryptoWallet.tsx
+│   │   ├── GraphView.tsx
+│   │   ├── LanguageSwitcher.tsx
+│   │   ├── PathInput.tsx
+│   │   ├── ProgressBar.tsx
+│   │   ├── SettingsModal.tsx
+│   │   ├── TextView.tsx
+│   │   ├── TreeView.tsx
+│   │   ├── VersionInfo.tsx
+│   ├── i18n
+│   │   ├── locales
+│   │   │   ├── en.json
+│   │   │   ├── fa.json
+│   │   ├── index.ts
+│   ├── types
+│   │   ├── FileSystem.ts
+│   ├── utils
+│   │   ├── fileSystem.ts
+│   │   ├── logger.ts
+│   │   ├── tokenStorage.ts
+│   ├── .env
+│   ├── App.tsx
+│   ├── index.css
+│   ├── main.tsx
+│   ├── vite-env.d.ts
+├── .gitignore
+├── eslint.config.js
+├── index.html
+├── LICENSE
+├── package-lock.json
+├── package.json
+├── postcss.config.js
+├── README.md
+├── SECURITY.md
+├── tailwind.config.js
+├── tree_20250307_160204.txt
+├── tsconfig.app.json
+├── tsconfig.json
+├── tsconfig.node.json
+├── version.txt
+├── vite.config.ts
