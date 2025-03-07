@@ -224,7 +224,7 @@ export async function fetchGitHubContents(
 
     if (rateLimit.rate.remaining === 0) {
       const resetTime = new Date(rateLimit.rate.reset * 1000);
-      throw new Error(`محدودیت API گیت‌هاب به پایان رسیده است. بازنشانی در ${resetTime.toLocaleString()}`);
+      throw new Error(`The GitHub API rate limit has been exceeded. Reset in ${resetTime.toLocaleString()}`);
     }
     
     // Track progress for the progress bar
@@ -412,8 +412,8 @@ export async function fetchGitHubContents(
             hasToken: !!options?.githubToken
           });
           const rateLimitError = options?.githubToken
-            ? 'محدودیت API گیت‌هاب به پایان رسیده است. لطفاً بعداً دوباره امتحان کنید.'
-            : 'محدودیت API گیت‌هاب به پایان رسیده است. لطفاً یک توکن دسترسی شخصی در تنظیمات اضافه کنید.';
+            ? 'The GitHub API rate limit has been exceeded. Please try again later.'
+            : 'The GitHub API rate limit has been exceeded. Please add a personal access token in the settings.';
           throw new Error(rateLimitError);
         }
         throw error;
@@ -453,19 +453,21 @@ export async function fetchGitHubContents(
         url,
         timeout: GITHUB_TIMEOUT
       });
-      throw new Error(`درخواست پس از ${MAX_RETRIES} تلاش با تأخیر مواجه شد. لطفاً بعداً دوباره امتحان کنید.`);
+      throw new Error(`The request failed after ${MAX_RETRIES} attempts. Please try again later.`);
+
     }
     if (error.status === 403) {
       logger.error('GitHub API rate limit exceeded', {
         hasToken: !!options?.githubToken
       });
       const rateLimitError = options?.githubToken
-        ? 'محدودیت API گیت‌هاب به پایان رسیده است. لطفاً بعداً دوباره امتحان کنید.'
-        : 'محدودیت API گیت‌هاب به پایان رسیده است. لطفاً یک توکن دسترسی شخصی در تنظیمات اضافه کنید.';
+        ? 'The GitHub API rate limit has been exceeded. Please try again later.'
+        : 'The GitHub API rate limit has been exceeded. Please add a personal access token in the settings.';
+
       throw new Error(rateLimitError);
     }
     logger.error('GitHub API error', { error });
-    throw new Error(`خطای گیت‌هاب: ${error.message}`);
+    throw new Error(`GitHub error: ${error.message}`);
   }
 }
 
@@ -577,8 +579,8 @@ export async function parseLocalPath(path: string, options?: VisualizationOption
   if (!('showDirectoryPicker' in window)) {
     logger.error('File System Access API not supported');
     throw new Error(
-      'مرورگر شما از API دسترسی به فایل پشتیبانی نمی‌کند. ' +
-      'لطفاً از مرورگر مدرن مانند کروم، اج یا اپرا استفاده کنید.'
+  'Your browser does not support the File System Access API. ' +
+  'Please use a modern browser such as Chrome, Edge, or Opera.'
     );
   }
   
@@ -591,14 +593,14 @@ export async function parseLocalPath(path: string, options?: VisualizationOption
   } catch (error) {
     if (error.name === 'AbortError') {
       logger.info('Directory selection cancelled by user');
-      throw new Error('انتخاب پوشه لغو شد.');
+      throw new Error('Folder selection was canceled.');
     }
     if (error.name === 'SecurityError' || error.message?.includes('permission')) {
       logger.error('Permission denied for directory access', { error });
-      throw new Error('دسترسی رد شد. لطفاً هنگام درخواست مرورگر، دسترسی به پوشه را مجاز کنید.');
+      throw new Error('Access denied. Please allow folder access when prompted by the browser.');
     }
     logger.error('Failed to read local directory', { error });
-    throw new Error('خطا در خواندن پوشه محلی. لطفاً دسترسی‌ها را بررسی کرده و دوباره امتحان کنید.');
+    throw new Error('Error reading the local folder. Please check the permissions and try again.');
   }
 }
 
