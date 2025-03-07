@@ -30,7 +30,7 @@ export const CryptoWallet: React.FC<CryptoWalletProps> = ({ darkMode = false }) 
       networks: [
         {
           name: 'Bitcoin',
-          symbol: 'BTC (BEP20)',
+          symbol: 'BTC',
           address: 'bc1q5tl36qpk27hf7upl8l753xa0gcm57adrvmwgkz'
         }
       ]
