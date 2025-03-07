@@ -9,7 +9,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability within FolderFusionX, please send an email to security@example.com. All security vulnerabilities will be promptly addressed.
+If you discover a security vulnerability within FolderFusionX, please send an email to LaneZeroX@proton.me. All security vulnerabilities will be promptly addressed.
 
 Please include the following information in your report:
 
