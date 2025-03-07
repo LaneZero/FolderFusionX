@@ -1,3 +1,5 @@
+![Image](https://github.com/user-attachments/assets/799fcb76-833e-4c18-8212-3a59987b2cc1)
+
 # Directory Visualizer
 
 A powerful and intuitive tool for visualizing directory structures with multiple view options.
@@ -110,6 +112,45 @@ If you find this project helpful, consider:
 - 🐛 Reporting issues
 - 🤝 Contributing to the codebase
 
+<details markdown="1"> <summary> <h3> # Supported Cryptocurrencies and Networks
+</h3></summary>
+
+### Networks:
+
+-   **Bitcoin**
+    -   Network: `BTC`
+    -   Address: `bc1q5tl36qpk27hf7upl8l753xa0gcm57adrvmwgkz`
+
+## Tether (USDT)
+
+### Networks:
+
+-   **Tether USDT**
+    
+    -   Network: `TRC20`
+    -   Address: `TA5pibChqS7CeHiDvfP7V3uQVMynk6SxLq`
+-   **Binance Smart Chain (BEP20)**
+    
+    -   Network: `BSC`
+    -   Address: `0x6634E26BA0e323182B7A9a89278E9a7BbCa9aF70`
+-   **TRON (TRC20)**
+    
+    -   Network: `TRX`
+    -   Address: `TA5pibChqS7CeHiDvfP7V3uQVMynk6SxLq`
+-   **Polygon**
+    
+    -   Network: `MATIC`
+    -   Address: `0x6634E26BA0e323182B7A9a89278E9a7BbCa9aF70`
+-   **Solana**
+    
+    -   Network: `SOL`
+    -   Address: `91kuBFEZAnRk8ixsuzAQnAVvtzLAsQpPFRsfe285ZKUC`
+-   **Ethereum**
+    
+    -   Network: `Ethereum TRC20`
+    -   Address: `0x6634E26BA0e323182B7A9a89278E9a7BbCa9aF70`
+
+</details>
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
