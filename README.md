@@ -1,6 +1,6 @@
 ![Image](https://github.com/user-attachments/assets/799fcb76-833e-4c18-8212-3a59987b2cc1)
 
-# Directory Visualizer
+# Folder Fusion X (FFX)
 
 A powerful and intuitive tool for visualizing directory structures with multiple view options.
 
