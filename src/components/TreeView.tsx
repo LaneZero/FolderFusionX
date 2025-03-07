@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { FileNode } from '../types/FileSystem';
 import { ChevronRight, ChevronDown, Folder, File, FolderOpen, Download, Copy, Check } from 'lucide-react';
 import { saveOutput } from '../utils/fileSystem';
+import { useTranslation } from 'react-i18next';
 
 interface TreeViewProps {
   data: FileNode;
