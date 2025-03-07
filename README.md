@@ -151,6 +151,7 @@ If you find this project helpful, consider:
     -   Address: `0x6634E26BA0e323182B7A9a89278E9a7BbCa9aF70`
 
 </details>
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
