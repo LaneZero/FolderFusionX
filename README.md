@@ -4,6 +4,8 @@
 
 A powerful and intuitive tool for visualizing directory structures with multiple view options.
 
+💿 [Watch the Tutorial on YouTube](https://youtu.be/QmcvH1XOikI)
+
 ## Features
 
 - 🌳 Tree View: Traditional directory tree visualization
