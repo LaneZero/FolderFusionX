@@ -16,14 +16,30 @@ const DEFAULT_OPTIONS: VisualizationOptions = {
 };
 
 // Timeout and retry configuration
-const GITHUB_TIMEOUT = 15000; // 15 seconds timeout
+const GITHUB_TIMEOUT = 8000; // 8 seconds timeout (reduced from 15s)
 const MAX_RETRIES = 2;
 const RETRY_DELAY = 1000;
 const BATCH_SIZE = 10; // Number of concurrent requests
+const OVERALL_TIMEOUT = 60000; // 60 seconds for the entire operation
 
 // Cache for GitHub API responses
 const apiCache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
+
+/**
+ * Creates a cancellable operation with abort controller
+ * Returns signal and cancel function for external use
+ */
+export function createCancellableOperation() {
+  const controller = new AbortController();
+  const signal = controller.signal;
+  
+  const cancel = () => {
+    controller.abort();
+  };
+  
+  return { signal, cancel };
+}
 
 /**
  * Delay function for retry mechanism
@@ -31,14 +47,27 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
- * Creates a promise that rejects after a specified timeout
+ * Creates a timeout promise with abort controller support
+ * @param ms Timeout in milliseconds
+ * @param signal Optional abort signal to connect with
  */
-function timeout(ms: number) {
-  return new Promise((_, reject) => {
-    setTimeout(() => {
-      reject(new Error('Operation timed out'));
+function createTimeoutWithAbort(ms: number, signal?: AbortSignal) {
+  const controller = new AbortController();
+  const timeoutPromise = new Promise((_, reject) => {
+    const id = setTimeout(() => {
+      controller.abort();
+      reject(new Error(`Operation timed out after ${ms}ms`));
     }, ms);
+    
+    if (signal) {
+      signal.addEventListener('abort', () => {
+        clearTimeout(id);
+        reject(new Error('Operation cancelled by user'));
+      });
+    }
   });
+  
+  return { timeoutPromise, controller };
 }
 
 /**
@@ -70,18 +99,30 @@ function setCachedResponse(key: string, data: any) {
 
 /**
  * Process API requests in batches
+ * Handles progress tracking and error recovery
  */
 async function processBatch<T>(
   items: any[],
   processor: (item: any) => Promise<T>,
+  signal?: AbortSignal,
   updateProgress?: () => void
 ): Promise<T[]> {
   const results: T[] = [];
   
   for (let i = 0; i < items.length; i += BATCH_SIZE) {
+    // Check for cancellation between batches
+    if (signal?.aborted) {
+      throw new Error('Operation cancelled by user');
+    }
+    
     const batch = items.slice(i, i + BATCH_SIZE);
     const batchResults = await Promise.all(
       batch.map(async (item) => {
+        // Check for cancellation for each item
+        if (signal?.aborted) {
+          return null;
+        }
+        
         try {
           const result = await processor(item);
           if (updateProgress) updateProgress();
@@ -100,35 +141,59 @@ async function processBatch<T>(
 }
 
 /**
- * Retry mechanism for API calls with exponential backoff
+ * Retry mechanism for API calls with improved error handling
+ * Supports cancellation and provides better error messages
  */
 async function withRetry<T>(
   fn: () => Promise<T>,
   retries = MAX_RETRIES,
+  signal?: AbortSignal,
   onRetry?: (attempt: number) => void
 ): Promise<T> {
   try {
-    return await Promise.race([
-      fn(),
-      timeout(GITHUB_TIMEOUT)
-    ]);
-  } catch (error) {
-    if (error.message === 'Operation timed out') {
-      throw new Error('Request timed out after 15 seconds');
+    // Check if already cancelled
+    if (signal?.aborted) {
+      throw new Error('Operation cancelled by user');
     }
     
+    const { timeoutPromise, controller } = createTimeoutWithAbort(GITHUB_TIMEOUT, signal);
+    
+    // Race between the actual request and timeout
+    return await Promise.race([
+      fn(),
+      timeoutPromise
+    ]);
+  } catch (error) {
+    // Handle cancellation
+    if (error.name === 'AbortError' || signal?.aborted) {
+      throw new Error('Operation cancelled by user');
+    }
+    
+    // Handle timeout specifically
+    if (error.message.includes('timed out')) {
+      throw new Error('GitHub request timed out. Repository might be too large or GitHub API is slow.');
+    }
+    
+    // Handle rate limiting without retries
+    if (error.status === 403 && error.message.includes('rate limit')) {
+      throw new Error('GitHub API rate limit exceeded. Please try again later or use a token with higher rate limits.');
+    }
+    
+    // Stop retrying if we've reached the limit
     if (retries === 0) {
       logger.error('API retry limit exceeded', { error });
       throw error;
     }
     
+    // Notify about retry attempt
     if (onRetry) {
       onRetry(MAX_RETRIES - retries + 1);
     }
     
+    // Exponential backoff for retries
     const backoffDelay = RETRY_DELAY * Math.pow(2, MAX_RETRIES - retries);
     await delay(backoffDelay);
-    return withRetry(fn, retries - 1, onRetry);
+    return withRetry(fn, retries - 1, signal, onRetry);
   }
 }
 
@@ -151,7 +216,28 @@ export async function parseGitHubUrl(url: string): Promise<{ owner: string; repo
 }
 
 /**
+ * Check repository size before fetching to prevent excessive API usage
+ */
+async function checkRepositorySize(octokit: Octokit, owner: string, repo: string): Promise<{ isLarge: boolean; size: number }> {
+  try {
+    const { data } = await octokit.rest.repos.get({ owner, repo });
+    const sizeInMB = data.size / 1024; // Convert to MB
+    
+    if (sizeInMB > 100) { // Repositories larger than 100MB
+      logger.warn('Large repository detected', { size: `${sizeInMB.toFixed(2)}MB` });
+      return { isLarge: true, size: sizeInMB };
+    }
+    
+    return { isLarge: false, size: sizeInMB };
+  } catch (error) {
+    logger.warn('Could not check repository size', { error });
+    return { isLarge: false, size: 0 };
+  }
+}
+
+/**
  * Validates a GitHub token
+ * Checks authentication and rate limits
  */
 export async function validateGitHubToken(token: string): Promise<{ 
   valid: boolean; 
@@ -191,28 +277,77 @@ export async function validateGitHubToken(token: string): Promise<{
 }
 
 /**
- * Fetches repository contents from GitHub
+ * Fetches repository contents from GitHub with improved cancellation and error handling
  */
 export async function fetchGitHubContents(
   url: string,
   options?: VisualizationOptions,
   signal?: AbortSignal
 ): Promise<FileNode> {
+  // Create a new AbortController connected to the external signal
+  const controller = new AbortController();
+  
+  // If signal is already aborted, cancel immediately
+  if (signal?.aborted) {
+    controller.abort();
+    throw new Error('Operation cancelled by user');
+  }
+  
+  // Connect external signal to our controller
+  if (signal) {
+    signal.addEventListener('abort', () => {
+      controller.abort();
+    });
+  }
+  
+  // Set an overall timeout for the entire operation
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, OVERALL_TIMEOUT);
+  
   try {
     const octokit = new Octokit({
       auth: options?.githubToken,
       request: {
         timeout: GITHUB_TIMEOUT,
-        signal
+        signal: controller.signal
       }
     });
 
+    // Quick validation of URL and repository access
     const { owner, repo, path } = await parseGitHubUrl(url);
     
-    // Check rate limit before proceeding
-    const { data: rateLimit } = await octokit.rest.rateLimit.get();
-    if (rateLimit.rate.remaining === 0) {
-      throw new Error(`GitHub API rate limit exceeded. Reset at ${new Date(rateLimit.rate.reset * 1000).toLocaleString()}`);
+    // Quick check for repository access and rate limits
+    try {
+      const { data: rateLimit } = await octokit.rest.rateLimit.get();
+      if (rateLimit.rate.remaining < 50) { // Ensure at least 50 requests are available
+        logger.warn('GitHub API rate limit is low', { 
+          remaining: rateLimit.rate.remaining,
+          reset: new Date(rateLimit.rate.reset * 1000).toLocaleString()
+        });
+      }
+      
+      if (rateLimit.rate.remaining === 0) {
+        throw new Error(`GitHub API rate limit exceeded. Reset at ${new Date(rateLimit.rate.reset * 1000).toLocaleString()}`);
+      }
+      
+      // Quick check for repository access
+      await octokit.rest.repos.get({ owner, repo });
+      
+      // Check repository size to prevent excessive API usage
+      const { isLarge, size } = await checkRepositorySize(octokit, owner, repo);
+      if (isLarge) {
+        logger.warn('Large repository detected', { size: `${size.toFixed(2)}MB` });
+        // Optionally throw error for very large repositories
+        if (size > 500) { // Over 500MB
+          throw new Error('Repository is too large (over 500MB). Please specify a subfolder path instead.');
+        }
+      }
+    } catch (error) {
+      if (error.status === 404) {
+        throw new Error('Repository not found or private. Please check the URL or your access permissions.');
+      }
+      throw error;
     }
 
     let totalFiles = 0;
@@ -228,23 +363,36 @@ export async function fetchGitHubContents(
       if (updateProgressCallback) {
         updateProgressCallback({
           total: totalFiles,
-          processed: processedFiles
+          processed: processedFiles,
+          status: controller.signal.aborted ? 'cancelled' : 'processing'
         });
       }
     };
 
+    /**
+     * Count files in a directory to estimate total work
+     */
     async function countFiles(path: string): Promise<number> {
+      // Check for cancellation
+      if (controller.signal.aborted) {
+        throw new Error('Operation cancelled by user');
+      }
+      
       const cacheKey = `count:${owner}/${repo}/${path}`;
       const cachedCount = getCachedResponse(cacheKey);
       
       if (cachedCount !== null) return cachedCount;
       
       try {
-        const response = await withRetry(() => octokit.rest.repos.getContent({
-          owner,
-          repo,
-          path: path || undefined
-        }));
+        const response = await withRetry(
+          () => octokit.rest.repos.getContent({
+            owner,
+            repo,
+            path: path || undefined
+          }),
+          MAX_RETRIES,
+          controller.signal
+        );
         
         if (!Array.isArray(response.data)) return 1;
         
@@ -256,31 +404,46 @@ export async function fetchGitHubContents(
               return countFiles(item.path);
             }
             return 0;
-          }
+          },
+          controller.signal
         );
         
         const total = counts.reduce((sum, count) => sum + (count || 0), 0);
         setCachedResponse(cacheKey, total);
         return total;
       } catch (error) {
-        if (error.name === 'AbortError') throw error;
+        if (controller.signal.aborted || error.name === 'AbortError') {
+          throw new Error('Operation cancelled');
+        }
         logger.warn(`Could not count files in ${path}`, { error });
         return 0;
       }
     }
 
+    /**
+     * Fetch directory contents with cancellation support
+     */
     async function fetchDirectory(path: string): Promise<FileNode> {
+      // Check for cancellation
+      if (controller.signal.aborted) {
+        throw new Error('Operation cancelled by user');
+      }
+      
       const cacheKey = `dir:${owner}/${repo}/${path}`;
       const cachedDir = getCachedResponse(cacheKey);
       
       if (cachedDir !== null) return cachedDir;
       
       try {
-        const response = await withRetry(() => octokit.rest.repos.getContent({
-          owner,
-          repo,
-          path: path || undefined
-        }));
+        const response = await withRetry(
+          () => octokit.rest.repos.getContent({
+            owner,
+            repo,
+            path: path || undefined
+          }),
+          MAX_RETRIES,
+          controller.signal
+        );
         
         if (!Array.isArray(response.data)) {
           throw new Error('Not a directory');
@@ -289,6 +452,7 @@ export async function fetchGitHubContents(
         const children = await processBatch(
           response.data,
           async (item) => {
+            // Skip excluded patterns
             if (options?.excludePatterns?.includes(item.name)) return null;
             
             const node: FileNode = {
@@ -302,6 +466,7 @@ export async function fetchGitHubContents(
               updateProgress();
               node.extension = item.name.includes('.') ? item.name.split('.').pop() : undefined;
               
+              // Only fetch content for small text files
               if (item.size < 100000 && isTextFile(item.name)) {
                 try {
                   const contentCacheKey = `content:${owner}/${repo}/${item.path}`;
@@ -310,18 +475,31 @@ export async function fetchGitHubContents(
                   if (cachedContent !== null) {
                     node.content = cachedContent;
                   } else {
-                    const fileContent = await withRetry(() => octokit.rest.repos.getContent({
-                      owner,
-                      repo,
-                      path: item.path
-                    }));
+                    // Check for cancellation before fetching content
+                    if (controller.signal.aborted) {
+                      throw new Error('Operation cancelled by user');
+                    }
+                    
+                    const fileContent = await withRetry(
+                      () => octokit.rest.repos.getContent({
+                        owner,
+                        repo,
+                        path: item.path
+                      }),
+                      MAX_RETRIES,
+                      controller.signal
+                    );
+                    
                     if ('content' in fileContent.data) {
                       node.content = Buffer.from(fileContent.data.content, 'base64').toString();
                       setCachedResponse(contentCacheKey, node.content);
                     }
                   }
                 } catch (error) {
-                  logger.warn(`Could not fetch content for ${item.path}`, { error });
+                  // Skip content fetching errors, just log them
+                  if (!controller.signal.aborted) {
+                    logger.warn(`Could not fetch content for ${item.path}`, { error });
+                  }
                 }
               }
             } else if (item.type === 'dir') {
@@ -331,6 +509,7 @@ export async function fetchGitHubContents(
             
             return node;
           },
+          controller.signal,
           updateProgress
         );
         
@@ -344,14 +523,19 @@ export async function fetchGitHubContents(
         setCachedResponse(cacheKey, result);
         return result;
       } catch (error) {
-        if (error.name === 'AbortError') throw error;
+        if (controller.signal.aborted || error.name === 'AbortError') {
+          throw new Error('Operation cancelled by user');
+        }
         if (error.message.includes('timed out')) {
-          throw new Error('Request timed out after 15 seconds. Please try again or use a more specific path.');
+          throw new Error('Request timed out. Please try again or use a more specific path.');
         }
         throw error;
       }
     }
 
+    /**
+     * Determines if a file is a text file based on extension
+     */
     function isTextFile(filename: string): boolean {
       const textExtensions = [
         'txt', 'md', 'js', 'jsx', 'ts', 'tsx', 'json', 'html', 'css', 'scss',
@@ -361,33 +545,72 @@ export async function fetchGitHubContents(
       return extension ? textExtensions.includes(extension) : false;
     }
 
-    totalFiles = await countFiles(path);
-    logger.info('Total files to process', { count: totalFiles });
-    
-    if (updateProgressCallback) {
-      updateProgressCallback({
-        total: totalFiles,
-        processed: 0,
-        status: 'processing'
-      });
-    }
-    
-    return fetchDirectory(path);
-  } catch (error) {
-    if (error.name === 'AbortError') {
-      logger.info('GitHub API request cancelled by user');
+    // Start the actual processing
+    try {
+      totalFiles = await countFiles(path);
+      logger.info('Total files to process', { count: totalFiles });
+      
+      if (updateProgressCallback) {
+        updateProgressCallback({
+          total: totalFiles,
+          processed: 0,
+          status: 'processing'
+        });
+      }
+      
+      // Check for cancellation after counting
+      if (controller.signal.aborted) {
+        throw new Error('Operation cancelled by user');
+      }
+      
+      const result = await fetchDirectory(path);
+      
+      // Final progress update
+      if (updateProgressCallback) {
+        updateProgressCallback({
+          total: totalFiles,
+          processed: processedFiles,
+          status: 'completed'
+        });
+      }
+      
+      return result;
+    } catch (error) {
+      // Update progress with error status
+      if (updateProgressCallback) {
+        updateProgressCallback({
+          status: controller.signal.aborted ? 'cancelled' : 'error',
+          error: error.message
+        });
+      }
       throw error;
     }
-    if (error.message.includes('timed out')) {
-      throw new Error('Request timed out after 15 seconds. Please try a more specific path or reduce the repository size.');
+  } catch (error) {
+    if (controller.signal.aborted || error.name === 'AbortError') {
+      logger.info('GitHub API request cancelled by user');
+      throw new Error('Operation cancelled by user');
     }
+    
+    // Better error handling with specific messages
+    if (error.message.includes('timed out')) {
+      throw new Error('Request timed out. Please try a more specific path or reduce the repository size.');
+    }
+    
     if (error.status === 403) {
       const message = options?.githubToken
         ? 'GitHub API rate limit exceeded. Please try again later.'
         : 'GitHub API rate limit exceeded. Please add a personal access token in settings.';
       throw new Error(message);
     }
+    
+    if (error.status === 404) {
+      throw new Error('Repository or path not found. Please check the URL.');
+    }
+    
     throw error;
+  } finally {
+    // Always clear timeout
+    clearTimeout(timeoutId);
   }
 }
 
@@ -407,9 +630,15 @@ async function processDirectory(
   dirHandle: FileSystemDirectoryHandle,
   name: string,
   path: string = name,
-  options?: VisualizationOptions
+  options?: VisualizationOptions,
+  signal?: AbortSignal
 ): Promise<FileNode> {
   const children: FileNode[] = [];
+  
+  // Check for cancellation
+  if (signal?.aborted) {
+    throw new Error('Operation cancelled by user');
+  }
   
   if (options?.excludePatterns?.includes(name)) {
     return {
@@ -428,10 +657,20 @@ async function processDirectory(
     
     const batchSize = 20;
     for (let i = 0; i < entries.length; i += batchSize) {
+      // Check for cancellation between batches
+      if (signal?.aborted) {
+        throw new Error('Operation cancelled by user');
+      }
+      
       const batch = entries.slice(i, i + batchSize);
       
       const batchResults = await Promise.all(
         batch.map(async (entry) => {
+          // Check for cancellation for each item
+          if (signal?.aborted) {
+            return null;
+          }
+          
           const entryPath = `${path}/${entry.name}`;
           
           if (entry.kind === 'directory' && options?.excludePatterns?.includes(entry.name)) {
@@ -459,7 +698,7 @@ async function processDirectory(
           } else if (entry.kind === 'directory') {
             try {
               const subDirHandle = await dirHandle.getDirectoryHandle(entry.name);
-              const subDir = await processDirectory(subDirHandle, entry.name, entryPath, options);
+              const subDir = await processDirectory(subDirHandle, entry.name, entryPath, options, signal);
               return subDir;
             } catch (error) {
               logger.warn(`Could not process directory ${entry.name}`, { error });
@@ -482,6 +721,9 @@ async function processDirectory(
       children
     };
   } catch (error) {
+    if (signal?.aborted) {
+      throw new Error('Operation cancelled by user');
+    }
     logger.error('Failed to process directory', { error });
     throw error;
   }
@@ -489,8 +731,13 @@ async function processDirectory(
 
 /**
  * Parses a local directory path using the File System Access API
+ * with cancellation support
  */
-export async function parseLocalPath(path: string, options?: VisualizationOptions): Promise<FileNode> {
+export async function parseLocalPath(
+  path: string, 
+  options?: VisualizationOptions,
+  signal?: AbortSignal
+): Promise<FileNode> {
   if (!('showDirectoryPicker' in window)) {
     throw new Error(
       'Your browser does not support the File System Access API. ' +
@@ -498,14 +745,19 @@ export async function parseLocalPath(path: string, options?: VisualizationOption
     );
   }
   
+  // Check for cancellation
+  if (signal?.aborted) {
+    throw new Error('Operation cancelled by user');
+  }
+  
   try {
     const dirHandle = await window.showDirectoryPicker({
       mode: 'read'
     });
     
-    return processDirectory(dirHandle, dirHandle.name, dirHandle.name, options);
+    return processDirectory(dirHandle, dirHandle.name, dirHandle.name, options, signal);
   } catch (error) {
-    if (error.name === 'AbortError') {
+    if (error.name === 'AbortError' || signal?.aborted) {
       throw new Error('Folder selection was canceled.');
     }
     if (error.name === 'SecurityError' || error.message?.includes('permission')) {
